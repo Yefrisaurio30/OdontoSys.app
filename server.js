@@ -11,19 +11,13 @@ try {
 } catch (e) {
   console.warn('⚠️ No se pudo configurar servidores DNS alternativos:', e.message);
 }
+
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const nodemailer = require('nodemailer');
 const PDFDocument = require('pdfkit');
 const { v4: uuidv4 } = require('uuid');
-
-// Configuración de DNS para resolver problemas con MongoDB Atlas SRV en Windows
-try {
-  dns.setServers(['8.8.8.8', '1.1.1.1']);
-} catch (e) {
-  console.warn('⚠️ No se pudo configurar servidores DNS alternativos:', e.message);
-}
 
 const app = express();
 app.set('trust proxy', true); // Necesario para detectar HTTPS correctamente en Render/Vercel
@@ -54,11 +48,14 @@ if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
 }
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // true para 465, false para otros puertos
-  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-  connectionTimeout: 10000, // 10 segundos de espera máximo
+  service: 'gmail',
+  auth: { 
+    user: process.env.EMAIL_USER, 
+    pass: process.env.EMAIL_PASS 
+  },
+  connectionTimeout: 20000, // Aumentado a 20s
+  greetingTimeout: 20000,
+  socketTimeout: 30000
 });
 
 // MongoDB
@@ -232,7 +229,8 @@ app.post('/api/auth/recuperar', async (req, res) => {
     const protocol = req.protocol;
     
     await transporter.sendMail({
-      from: process.env.EMAIL_FROM, to: email,
+      from: `OdontoSys <${process.env.EMAIL_USER}>`, 
+      to: email,
       subject: 'Recuperación de contraseña — OdontoSys',
       html: `<p>Haz clic en el enlace para restablecer tu contraseña:</p><a href="${protocol}://${host}/reset.html?token=${token}">Restablecer contraseña</a><p>El enlace expira en 1 hora.</p>`
     });
