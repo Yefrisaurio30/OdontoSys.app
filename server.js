@@ -50,13 +50,14 @@ if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
 }
 
 // ═══════════════ SISTEMA DE EMAIL ═══════════════
-// Render bloquea Gmail SMTP pero NO el de Brevo (smtp-relay.brevo.com:587).
-// Brevo SMTP no tiene restricción de IPs. Envía a cualquier destinatario sin dominio propio.
 async function sendEmail({ to, subject, html }) {
   const nodemailer = require('nodemailer');
 
+  console.log(`📤 Intentando enviar email a: ${to}`);
+  console.log(`   BREVO_SMTP_USER: ${process.env.BREVO_SMTP_USER ? '✅ SET' : '❌ MISSING'}`);
+  console.log(`   BREVO_SMTP_PASS: ${process.env.BREVO_SMTP_PASS ? '✅ SET' : '❌ MISSING'}`);
+
   if (process.env.BREVO_SMTP_PASS) {
-    // ✅ Brevo SMTP — funciona en Render, sin restricción de IPs, envía a cualquier email
     const transporter = nodemailer.createTransport({
       host: 'smtp-relay.brevo.com',
       port: 587,
@@ -64,8 +65,16 @@ async function sendEmail({ to, subject, html }) {
       auth: {
         user: process.env.BREVO_SMTP_USER,
         pass: process.env.BREVO_SMTP_PASS
-      }
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000
     });
+
+    // Verificar conexión antes de enviar
+    await transporter.verify();
+    console.log('✅ Conexión Brevo SMTP verificada');
+
     const info = await transporter.sendMail({
       from: `OdontoSys <${process.env.BREVO_SMTP_USER}>`,
       to,
@@ -76,8 +85,7 @@ async function sendEmail({ to, subject, html }) {
     return info;
 
   } else {
-    // Fallback local — solo para desarrollo, no funciona en Render
-    console.warn('⚠️ BREVO_SMTP_PASS no configurada. Usando Gmail (solo local).');
+    console.warn('⚠️ BREVO_SMTP_PASS no configurada en Render. Usando Gmail (solo funciona en local).');
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
@@ -97,9 +105,9 @@ async function sendEmail({ to, subject, html }) {
   }
 }
 
-console.log('📧 Sistema de email:');
-console.log('   - BREVO_SMTP_PASS:', process.env.BREVO_SMTP_PASS ? 'CONFIGURADO ✅ (Brevo SMTP — envía a cualquier email)' : 'NO CONFIGURADA ⚠️ (fallback Gmail local)');
-console.log('   - Remitente:', process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'FALTA ❌');
+console.log('📧 Sistema de email al iniciar:');
+console.log('   BREVO_SMTP_USER:', process.env.BREVO_SMTP_USER ? process.env.BREVO_SMTP_USER : '❌ NO CONFIGURADO EN RENDER');
+console.log('   BREVO_SMTP_PASS:', process.env.BREVO_SMTP_PASS ? '✅ CONFIGURADO' : '❌ NO CONFIGURADO EN RENDER');
 
 
 
