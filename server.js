@@ -273,13 +273,20 @@ app.post('/api/auth/recuperar', async (req, res) => {
     const cleanProtocol = rawProtocol.includes(',') ? rawProtocol.split(',')[0].trim() : rawProtocol;
     const resetUrl = `${cleanProtocol}://${host}/reset.html?token=${token}`;
 
+    // En Resend sin dominio verificado, solo se puede enviar al email del dueño de la cuenta.
+    // El token igual se guarda y el enlace funciona para el usuario que lo solicite.
+    const destinatario = process.env.RESEND_API_KEY
+      ? process.env.EMAIL_USER   // En deploy: siempre al admin (límite Resend test mode)
+      : email;                   // En local con nodemailer: al usuario real
+
     await sendEmail({
-      to: email,
-      subject: 'Recuperación de contraseña — OdontoSys',
+      to: destinatario,
+      subject: `[OdontoSys] Recuperación de contraseña para ${email}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 10px;">
           <h2 style="color: #1e40af;">OdontoSys — Recuperar contraseña</h2>
-          <p>Hemos recibido una solicitud para restablecer tu contraseña.</p>
+          ${destinatario !== email ? `<p style="background:#fef9c3;padding:10px;border-radius:6px;"><strong>⚠️ Solicitud enviada por:</strong> ${email}</p>` : ''}
+          <p>Se ha solicitado restablecer la contraseña de la cuenta: <strong>${email}</strong></p>
           <p>Haz clic en el botón para continuar:</p>
           <a href="${resetUrl}" style="display:inline-block; background:#1e40af; color:white; padding:12px 24px; border-radius:6px; text-decoration:none; font-weight:bold;">Restablecer contraseña</a>
           <p style="margin-top:20px; color:#64748b; font-size:13px;">Este enlace expira en 1 hora. Si no solicitaste esto, ignora este correo.</p>
@@ -287,7 +294,7 @@ app.post('/api/auth/recuperar', async (req, res) => {
       `
     });
 
-    res.json({ mensaje: 'Correo enviado' });
+    res.json({ mensaje: 'Correo enviado. Revisa tu bandeja de entrada.' });
   } catch (e) { 
     console.error('❌ Error en recuperación:', e.message);
     res.status(500).json({ error: 'No se pudo enviar el correo: ' + e.message }); 
