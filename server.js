@@ -49,25 +49,57 @@ if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
   fs.mkdirSync(path.join(__dirname, 'uploads'), { recursive: true });
 }
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.googlemail.com',
-  port: 465,
-  secure: true,
-  auth: { 
-    user: process.env.EMAIL_USER, 
-    pass: process.env.EMAIL_PASS 
-  },
-  debug: true,
-  logger: true,
-  tls: {
-    rejectUnauthorized: false
+// ═══════════════ SISTEMA DE EMAIL ═══════════════
+// Render bloquea SMTP saliente en plan gratuito.
+// Se usa Resend (API HTTP) si RESEND_API_KEY está configurada.
+// Fallback: nodemailer para desarrollo local.
+async function sendEmail({ to, subject, html }) {
+  const resendKey = process.env.RESEND_API_KEY;
+  
+  if (resendKey) {
+    // Resend via fetch (sin dependencia extra si no está instalada)
+    try {
+      const { Resend } = require('resend');
+      const resend = new Resend(resendKey);
+      const result = await resend.emails.send({
+        from: 'OdontoSys <onboarding@resend.dev>',
+        to,
+        subject,
+        html
+      });
+      if (result.error) throw new Error(JSON.stringify(result.error));
+      console.log('✅ Email enviado via Resend:', result.data?.id);
+      return result;
+    } catch (e) {
+      console.error('❌ Error Resend:', e.message);
+      throw e;
+    }
+  } else {
+    // Fallback nodemailer para desarrollo local
+    console.warn('⚠️ RESEND_API_KEY no configurada. Usando nodemailer (solo funciona en local).');
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: { 
+        user: process.env.EMAIL_USER, 
+        pass: process.env.EMAIL_PASS 
+      },
+      tls: { rejectUnauthorized: false }
+    });
+    return await transporter.sendMail({
+      from: `OdontoSys <${process.env.EMAIL_USER}>`,
+      to,
+      subject,
+      html
+    });
   }
-});
+}
 
-console.log('📧 Configuración de correo:');
-console.log('   - Usuario:', process.env.EMAIL_USER ? 'CONFIGURADO ✅' : 'FALTA ❌');
-console.log('   - Password:', process.env.EMAIL_PASS ? 'CONFIGURADO ✅' : 'FALTA ❌');
-console.log('   - From:', process.env.EMAIL_FROM ? process.env.EMAIL_FROM : 'Usando usuario predeterminado');
+console.log('📧 Sistema de email:');
+console.log('   - RESEND_API_KEY:', process.env.RESEND_API_KEY ? 'CONFIGURADO ✅ (usará Resend)' : 'NO CONFIGURADA ⚠️ (fallback nodemailer local)');
+console.log('   - EMAIL_USER:', process.env.EMAIL_USER ? 'CONFIGURADO ✅' : 'FALTA ❌');
 
 // MongoDB
 const MONGO_URI = process.env.MONGO_URI;
@@ -237,16 +269,22 @@ app.post('/api/auth/recuperar', async (req, res) => {
     const expira = new Date(Date.now() + 3600000);
     await mongoDb.collection('usuarios_sistema').updateOne({ email }, { $set: { token_recuperacion: token, token_expiracion: expira } });
     const host = req.get('x-forwarded-host') || req.get('host');
-    const protocol = req.get('x-forwarded-proto') || req.protocol;
-    
-    // Si el protocolo viene como 'http,https', tomamos solo https
-    const cleanProtocol = protocol.includes(',') ? protocol.split(',')[1] : protocol;
-    
-    await transporter.sendMail({
-      from: `OdontoSys <${process.env.EMAIL_USER}>`, 
+    const rawProtocol = req.get('x-forwarded-proto') || req.protocol || 'https';
+    const cleanProtocol = rawProtocol.includes(',') ? rawProtocol.split(',')[0].trim() : rawProtocol;
+    const resetUrl = `${cleanProtocol}://${host}/reset.html?token=${token}`;
+
+    await sendEmail({
       to: email,
       subject: 'Recuperación de contraseña — OdontoSys',
-      html: `<p>Haz clic en el enlace para restablecer tu contraseña:</p><a href="${cleanProtocol}://${host}/reset.html?token=${token}">Restablecer contraseña</a><p>El enlace expira en 1 hora.</p>`
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 10px;">
+          <h2 style="color: #1e40af;">OdontoSys — Recuperar contraseña</h2>
+          <p>Hemos recibido una solicitud para restablecer tu contraseña.</p>
+          <p>Haz clic en el botón para continuar:</p>
+          <a href="${resetUrl}" style="display:inline-block; background:#1e40af; color:white; padding:12px 24px; border-radius:6px; text-decoration:none; font-weight:bold;">Restablecer contraseña</a>
+          <p style="margin-top:20px; color:#64748b; font-size:13px;">Este enlace expira en 1 hora. Si no solicitaste esto, ignora este correo.</p>
+        </div>
+      `
     });
 
     res.json({ mensaje: 'Correo enviado' });
