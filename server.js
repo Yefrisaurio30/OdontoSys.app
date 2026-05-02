@@ -54,8 +54,11 @@ if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
 }
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // true para 465, false para otros puertos
+  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+  connectionTimeout: 10000, // 10 segundos de espera máximo
 });
 
 // MongoDB
@@ -150,7 +153,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user || !await bcrypt.compare(password, user.password))
       return res.status(401).json({ error: 'Credenciales inválidas' });
     const token = jwt.sign({ id: user._id.toString(), email: user.email, rol: user.rol }, process.env.JWT_SECRET, { expiresIn: '8h' });
-    res.json({ token, nombre: user.nombre, rol: user.rol });
+    res.json({ token, id: user._id.toString(), username: user.username, nombre: user.nombre, rol: user.rol });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
