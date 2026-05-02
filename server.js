@@ -109,6 +109,19 @@ async function connectMongo() {
   setTimeout(connectMongo, 20000);
 }
 
+// PostgreSQL
+const pgPool = new Pool({
+  host: process.env.PG_HOST || 'localhost', port: process.env.PG_PORT || 5432,
+  user: process.env.PG_USER || 'postgres', password: process.env.PG_PASSWORD || '1234',
+  database: process.env.PG_DB || 'odontosys'
+});
+
+async function connectPG() {
+  try {
+    await pgPool.query('SELECT 1');
+    console.log('✅ CONECTADO A POSTGRESQL');
+  } catch (e) { console.error('⚠️ ERROR PG:', e.message); }
+}
 
 // Helpers
 function isValidId(id) { return ObjectId.isValid(id) && id.length === 24; }
