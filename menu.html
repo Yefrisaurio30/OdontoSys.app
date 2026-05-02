@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OdontoSys — Menú Principal</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .welcome-section {
+      background: linear-gradient(135deg, var(--azul-claro) 0%, #EBF4FB 100%);
+      padding: 40px 32px 32px;
+      text-align: center;
+    }
+    .welcome-section h2 { font-size: 1.6rem; color: var(--texto); margin-bottom: 6px; }
+    .welcome-section p { color: var(--gris-texto); font-size: 0.9rem; }
+    .welcome-section .rol-badge { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; }
+    .separator { height: 1px; background: var(--gris-borde); margin: 0 32px; }
+    .section-heading { text-align: center; padding: 28px 32px 8px; color: var(--gris-texto); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; }
+    .admin-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; padding: 12px 32px 40px; max-width: 760px; margin: 0 auto; width: 100%; }
+    .user-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; padding: 12px 32px 40px; max-width: 560px; margin: 0 auto; width: 100%; }
+    .menu-card-big { background: var(--blanco); border-radius: var(--radio-lg); padding: 28px 24px; display: flex; align-items: center; gap: 16px; cursor: pointer; border: 2px solid var(--gris-borde); transition: var(--transicion); text-decoration: none; color: inherit; }
+    .menu-card-big:hover { border-color: var(--azul-primario); box-shadow: var(--sombra-hover); transform: translateY(-2px); }
+    .menu-card-big .card-icon { width: 52px; height: 52px; background: var(--azul-claro); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; transition: var(--transicion); }
+    .menu-card-big:hover .card-icon { background: var(--azul-primario); }
+    .menu-card-big .card-text .title { font-weight: 600; font-size: 0.95rem; margin-bottom: 2px; }
+    .menu-card-big .card-text .desc { font-size: 0.78rem; color: var(--gris-texto); }
+    @media (max-width: 560px) { .admin-grid, .user-grid { grid-template-columns: 1fr; padding: 12px 16px 32px; } }
+  </style>
+</head>
+<body>
+  <div class="management-page">
+    <div id="toast-container"></div>
+    <div id="top-bar-container"></div>
+    <div class="welcome-section">
+      <h2 id="welcome-title">Bienvenido</h2>
+      <p>Selecciona una opción del menú para comenzar</p>
+      <div class="rol-badge" id="rol-badge"></div>
+    </div>
+    <div class="separator"></div>
+    <p class="section-heading" id="section-heading"></p>
+    <div id="menu-items"></div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="DAOHybrid.js"></script>
+  <script>
+    if (!Session.requireLogin()) throw 'not logged in';
+    const usuario = Session.get() || {};
+
+    try {
+      // Render Top Bar
+      const uname = usuario.nombre || usuario.username || usuario.email || 'Usuario';
+      document.getElementById('top-bar-container').innerHTML = renderTopBar('Menú Principal');
+      document.getElementById('welcome-title').textContent = `Bienvenido, ${uname}`;
+
+      // Badge de Rol
+      const rolBadge = document.getElementById('rol-badge');
+      const userRol = (usuario.rol || 'USUARIO').toUpperCase();
+      rolBadge.innerHTML = userRol === 'ADMIN'
+        ? '<span class="badge badge-admin">👑 Administrador</span>'
+        : '<span class="badge badge-user">👤 Paciente</span>';
+
+      const menuItems = document.getElementById('menu-items');
+      const sectionHeading = document.getElementById('section-heading');
+
+      if (userRol === 'ADMIN') {
+        sectionHeading.textContent = 'Panel de Administración';
+        menuItems.className = 'admin-grid';
+        menuItems.innerHTML = `
+          <a href="citas.html" class="menu-card-big">
+            <div class="card-icon">📅</div>
+            <div class="card-text"><div class="title">Gestión de Citas</div><div class="desc">Programar, editar y cancelar citas</div></div>
+          </a>
+          <a href="pacientes.html" class="menu-card-big">
+            <div class="card-icon">👥</div>
+            <div class="card-text"><div class="title">Gestión de Pacientes</div><div class="desc">Directorio y expedientes</div></div>
+          </a>
+          <a href="odontologos.html" class="menu-card-big">
+            <div class="card-icon">🩺</div>
+            <div class="card-text"><div class="title">Gestión de Odontólogos</div><div class="desc">Especialistas del consultorio</div></div>
+          </a>
+          <a href="usuarios.html" class="menu-card-big">
+            <div class="card-icon">🔐</div>
+            <div class="card-text"><div class="title">Gestión de Usuarios</div><div class="desc">Cuentas y roles del sistema</div></div>
+          </a>
+          <a href="inventario.html" class="menu-card-big">
+            <div class="card-icon">📦</div>
+            <div class="card-text"><div class="title">Inventario</div><div class="desc">Stock de productos</div></div>
+          </a>
+          <a href="ventas.html" class="menu-card-big">
+            <div class="card-icon">🛒</div>
+            <div class="card-text"><div class="title">Ventas</div><div class="desc">Vender productos y facturar</div></div>
+          </a>
+          <a href="caja.html" class="menu-card-big">
+            <div class="card-icon">💰</div>
+            <div class="card-text"><div class="title">Caja y Saldo</div><div class="desc">Ganancias y reportes PDF</div></div>
+          </a>`;
+      } else {
+        sectionHeading.textContent = 'Mi Panel de Paciente';
+        menuItems.className = 'user-grid';
+        menuItems.innerHTML = `
+          <a href="agendar-cita.html" class="menu-card-big">
+            <div class="card-icon">➕</div>
+            <div class="card-text"><div class="title">Agendar Cita</div><div class="desc">Solicita una nueva cita</div></div>
+          </a>
+          <a href="mis-citas.html" class="menu-card-big">
+            <div class="card-icon">📋</div>
+            <div class="card-text"><div class="title">Mis Citas</div><div class="desc">Ver tu historial de citas</div></div>
+          </a>`;
+      }
+    } catch (err) {
+      console.error('Error en menú:', err);
+      document.body.innerHTML += `<div style="color:red;padding:20px;">Error cargando menú: ${err.message}</div>`;
+    }
+  </script>
+</body>
+</html>

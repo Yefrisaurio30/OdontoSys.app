@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OdontoSys — Login</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .login-container {
+      max-width: 400px;
+      margin: 100px auto;
+      padding: 30px;
+      background: white;
+      border-radius: var(--radio);
+      box-shadow: var(--sombra);
+    }
+    .login-container h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: var(--azul-principal);
+    }
+    .login-container .form-group {
+      margin-bottom: 15px;
+    }
+    .recuperar-form {
+      display: none;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+    }
+    .toggle-link {
+      text-align: center;
+      margin-top: 15px;
+      color: var(--azul-principal);
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .toggle-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <h2>🔐 OdontoSys Login</h2>
+    
+    <!-- Formulario de login -->
+    <div id="login-form">
+      <div class="form-group">
+        <label class="form-label" for="email">Email *</label>
+        <input id="email" type="email" class="form-input" placeholder="tu@email.com" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="password">Contraseña *</label>
+        <input id="password" type="password" class="form-input" placeholder="••••••••" required />
+      </div>
+      <button onclick="login()" class="btn btn-primary" style="width:100%;">🚀 Iniciar sesión</button>
+      <div class="toggle-link" onclick="mostrarRecuperar()">¿Olvidé mi contraseña?</div>
+    </div>
+
+    <!-- Formulario de recuperación -->
+    <div id="recuperar-form" class="recuperar-form">
+      <h3 style="font-size:1rem; margin-bottom:15px;">🔄 Recuperar Contraseña</h3>
+      <div class="form-group">
+        <label class="form-label" for="email-recuperar">Email *</label>
+        <input id="email-recuperar" type="email" class="form-input" placeholder="tu@email.com" required />
+      </div>
+      <button onclick="recuperar()" class="btn btn-secondary" style="width:100%;">📧 Enviar correo</button>
+      <div class="toggle-link" onclick="mostrarLogin()">← Volver al login</div>
+    </div>
+  </div>
+
+  <script>
+    // Verificar si ya hay token
+    const token = localStorage.getItem('token');
+    if (token) window.location.href = 'menu.html';
+
+    function mostrarRecuperar() {
+      document.getElementById('login-form').style.display = 'none';
+      document.getElementById('recuperar-form').style.display = 'block';
+    }
+
+    function mostrarLogin() {
+      document.getElementById('login-form').style.display = 'block';
+      document.getElementById('recuperar-form').style.display = 'none';
+    }
+
+    async function login() {
+      const email    = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      const res  = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+
+      if (!res.ok) return alert(data.error || 'Error en login');
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('usuario', JSON.stringify({ nombre: data.nombre, rol: data.rol }));
+      window.location.href = 'menu.html';
+    }
+
+    async function recuperar() {
+      const email = document.getElementById('email-recuperar').value;
+      const res   = await fetch('/api/auth/recuperar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await res.json();
+      alert(res.ok ? 'Revisa tu correo' : (data.error || 'Error'));
+    }
+  </script>
+</body>
+</html>

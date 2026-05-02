@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OdontoSys — Mis Citas</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .badge-Pendiente { background: #FEF3C7; color: #92400E; }
+    .badge-Realizada { background: #D1FAE5; color: #065F46; }
+    .badge-Cancelada { background: #FEE2E2; color: #991B1B; }
+    .empty-user { text-align: center; padding: 40px 20px; color: var(--gris-texto); }
+    .empty-user .icon { font-size: 2.5rem; display: block; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <div class="management-page">
+    <div id="toast-container"></div>
+    <div id="top-bar-container"></div>
+
+    <div class="page-header">
+      <div>
+        <h2>📋 Mis Citas</h2>
+        <p class="subtitle">Historial y estado de tus citas odontológicas</p>
+      </div>
+      <div class="btn-group">
+        <a href="agendar-cita.html" class="btn btn-primary">➕ Agendar nueva cita</a>
+      </div>
+    </div>
+
+    <div class="content-area">
+      <div class="table-wrapper">
+        <div class="table-actions">
+          <div id="table-count" style="font-size:.8rem;color:var(--gris-texto);">Cargando...</div>
+          <div style="display:flex;gap:8px;">
+            <select id="filter-estado" class="form-select" style="width:160px;">
+              <option value="">Todos los estados</option>
+              <option>Pendiente</option>
+              <option>Realizada</option>
+              <option>Cancelada</option>
+            </select>
+            <button id="btn-reload" class="btn btn-ghost btn-sm">🔄 Actualizar</button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Odontólogo</th>
+              <th>Especialidad</th>
+              <th>Fecha / Hora</th>
+              <th>Estado</th>
+              <th>Motivo</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-body">
+            <tr><td colspan="6" class="empty-state">Cargando tus citas...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Modal confirmación -->
+    <div id="confirm-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <h3 id="confirm-title">¿Confirmar acción?</h3>
+        <p id="confirm-message">Esta acción no se puede deshacer.</p>
+        <div class="modal-actions">
+          <button id="confirm-no"  class="btn btn-ghost">No, volver</button>
+          <button id="confirm-yes" class="btn btn-danger">Sí, cancelar cita</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="DAOHybrid.js"></script>
+  <script>
+    if (!Session.requireLogin()) throw new Error('not logged in');
+    document.getElementById('top-bar-container').innerHTML = renderTopBar('Mis Citas');
+
+    const usuario = Session.get();
+    let todasMisCitas = [];
+
+    function formatDate(str) {
+      if (!str) return '—';
+      try { return new Date(str.replace(' ', 'T')).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }); }
+      catch { return str; }
+    }
+
+    function renderTabla(list) {
+      const tbody = document.getElementById('tabla-body');
+      document.getElementById('table-count').textContent =
+        `${list.length} cita${list.length !== 1 ? 's' : ''}`;
+
+      if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="6">
+          <div class="empty-user">
+            <span class="icon">📅</span>
+            <strong>Sin citas en este filtro</strong><br>
+            <small><a href="agendar-cita.html">Agendar una nueva cita</a></small>
+          </div>
+        </td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list.map(c => {
+        const odo       = DAO._odontologosCache.find(o => String(o._id || o.id) === String(c.idOdontologo));
+        const odoNombre = odo ? `Dr. ${odo.nombre} ${odo.apellido}` : '—';
+        const odoSpec   = odo ? (odo.especialidad || 'General') : '—';
+        const estadoClass = `badge-${c.estado}`;
+        return `
+        <tr>
+          <td><strong>${odoNombre}</strong></td>
+          <td>${odoSpec}</td>
+          <td>${formatDate(c.fechaHora)}</td>
+          <td><span class="badge ${estadoClass}">${c.estado || 'Pendiente'}</span></td>
+          <td style="max-width:180px;font-size:.82rem;">${c.motivo || '—'}</td>
+          <td>
+            ${c.estado === 'Pendiente'
+              ? `<button class="btn-eye" title="Cancelar cita"
+                   onclick="cancelar('${c.id || c._id}')">❌ Cancelar</button>`
+              : '<span style="color:var(--gris-texto);font-size:.78rem;">—</span>'}
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function applyFilter() {
+      const estado = document.getElementById('filter-estado').value;
+      const filtered = estado
+        ? todasMisCitas.filter(c => c.estado === estado)
+        : todasMisCitas;
+      renderTabla(filtered);
+    }
+
+    async function cargar() {
+      const tbody = document.getElementById('tabla-body');
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Cargando...</td></tr>';
+      try {
+        await DAO.loadNombreCache();
+        const todas = await DAO.getCitas();
+
+        const uid   = String(usuario.id || '');
+        const uname = String(usuario.username || '');
+
+        todasMisCitas = todas.filter(c =>
+          String(c.usuarioId     || '') === uid ||
+          String(c.usuarioNombre || '') === uname ||
+          String(c.idPaciente    || '') === uid
+        );
+
+        // Ordenar por fecha desc
+        todasMisCitas.sort((a, b) => new Date(b.fechaHora) - new Date(a.fechaHora));
+        applyFilter();
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color:#dc2626;">Error: ${e.message}</td></tr>`;
+      }
+    }
+
+    window.cancelar = async function(id) {
+      const ok = await confirmDialog('Cancelar Cita', '¿Seguro que deseas cancelar esta cita? No se puede deshacer.');
+      if (!ok) return;
+      try {
+        await DAO.updateCita({ id, estado: 'Cancelada' });
+        showToast('Cita cancelada.', 'success');
+        cargar();
+      } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+      }
+    };
+
+    document.getElementById('filter-estado').addEventListener('change', applyFilter);
+    document.getElementById('btn-reload').addEventListener('click', cargar);
+
+    cargar();
+  </script>
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OdontoSys — Clientes</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .db-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+    .db-badge.mongodb { background: #D1FAE5; color: #065F46; }
+  </style>
+</head>
+<body>
+  <div class="management-page">
+    <div id="toast-container"></div>
+    <div id="top-bar-container"></div>
+
+    <div class="page-header">
+      <div>
+        <h2>👤 Registro de Clientes</h2>
+        <p class="subtitle">Colección MongoDB Atlas — Clientes de la clínica</p>
+      </div>
+      <span class="db-badge mongodb">🟢 MongoDB</span>
+    </div>
+
+    <!-- Formulario -->
+    <div class="form-section">
+      <div class="form-section-title">📝 <span id="form-title-cli">Registrar Cliente</span></div>
+      <form id="cliente-form" enctype="multipart/form-data">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="nombre">Nombre *</label>
+            <input id="nombre" type="text" class="form-input" placeholder="Ej: Juan" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="apellido">Apellido *</label>
+            <input id="apellido" type="text" class="form-input" placeholder="Ej: Pérez" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="cedula">Cédula *</label>
+            <input id="cedula" type="text" class="form-input" placeholder="1234567890" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="telefono">Teléfono</label>
+            <input id="telefono" type="tel" class="form-input" placeholder="3001234567" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="email-cli">Email</label>
+            <input id="email-cli" type="email" class="form-input" placeholder="juan@mail.com" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="rut_pdf">RUT PDF</label>
+            <input id="rut_pdf" type="file" accept=".pdf" class="form-input" />
+          </div>
+        </div>
+        <div class="btn-group">
+          <button type="submit" id="btn-guardar" class="btn btn-primary">💾 Guardar</button>
+          <button type="button" id="btn-limpiar" class="btn btn-ghost">✕ Limpiar</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Tabla -->
+    <div class="table-actions">
+      <button id="btn-recargar" class="btn btn-secondary">🔄 Recargar</button>
+      <span id="table-count" style="font-size:0.8rem;color:var(--gris-texto);">Cargando...</span>
+    </div>
+
+    <div class="content-area">
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Cédula</th>
+              <th>Teléfono</th>
+              <th>Email</th>
+              <th>RUT</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-clientes">
+            <tr><td colspan="6" class="empty-state">Cargando clientes...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="confirm-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <h3 id="confirm-title">¿Confirmar acción?</h3>
+        <p id="confirm-message">Esta acción no se puede deshacer.</p>
+        <div class="modal-actions">
+          <button id="confirm-no" class="btn btn-ghost">Cancelar</button>
+          <button id="confirm-yes" class="btn btn-danger">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="DAOHybrid.js"></script>
+  <script>
+    if (!localStorage.getItem('token')) window.location.href = 'login.html';
+    document.getElementById('top-bar-container').innerHTML = renderTopBar('Clientes MongoDB');
+
+    let editId = null;
+    const tabla = document.getElementById('tabla-clientes');
+    const form = document.getElementById('cliente-form');
+
+    async function cargarClientes() {
+      tabla.innerHTML = '<tr><td colspan="6" class="empty-state">Cargando...</td></tr>';
+      try {
+        const clientes = await DAO.getClientes();
+        document.getElementById('table-count').textContent = `${clientes.length} cliente${clientes.length !== 1 ? 's' : ''}`;
+
+        if (!clientes || clientes.length === 0) {
+          tabla.innerHTML = '<tr><td colspan="6" class="empty-state">No hay clientes registrados.</td></tr>';
+          return;
+        }
+
+        tabla.innerHTML = clientes.map(c => {
+          const id = c._id || c.id || '';
+          return `<tr>
+            <td><strong>${c.nombre || ''} ${c.apellido || ''}</strong></td>
+            <td>${c.cedula || '—'}</td>
+            <td>${c.telefono || '—'}</td>
+            <td>${c.email || '—'}</td>
+            <td>${c.rut_pdf ? `<a href="/uploads/${c.rut_pdf}" target="_blank">Ver PDF</a>` : '—'}</td>
+            <td>
+              <button class="btn-eye" title="Editar" onclick="editarCliente('${id}')">✏️</button>
+              <button class="btn-eye" title="Eliminar" onclick="eliminarCliente('${id}', '${(c.nombre||'').replace(/'/g,"\\'")}')">🗑️</button>
+            </td>
+          </tr>`;
+        }).join('');
+      } catch (e) {
+        tabla.innerHTML = `<tr><td colspan="6" class="empty-state" style="color:#dc2626;">❌ Error: ${e.message}</td></tr>`;
+      }
+    }
+
+    window.editarCliente = async function(id) {
+      try {
+        const c = await DAO.getCliente(id);
+        if (!c) { showToast('Cliente no encontrado', 'error'); return; }
+        document.getElementById('nombre').value = c.nombre || '';
+        document.getElementById('apellido').value = c.apellido || '';
+        document.getElementById('cedula').value = c.cedula || '';
+        document.getElementById('telefono').value = c.telefono || '';
+        document.getElementById('email-cli').value = c.email || '';
+        editId = id;
+        document.getElementById('btn-guardar').textContent = '✏️ Actualizar';
+        document.getElementById('form-title-cli').textContent = 'Editar Cliente';
+        showToast('Editando: ' + c.nombre, 'info');
+      } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    window.eliminarCliente = async function(id, nombre) {
+      const ok = await confirmDialog('Eliminar Cliente', `¿Eliminar "${nombre}"?`);
+      if (!ok) return;
+      try {
+        await DAO.deleteCliente(id);
+        showToast('Cliente eliminado.', 'success');
+        cargarClientes();
+      } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    };
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const btn = document.getElementById('btn-guardar');
+      btn.disabled = true;
+      try {
+        if (editId) {
+          await DAO.updateCliente(editId, fd);
+          showToast('Cliente actualizado ✅', 'success');
+        } else {
+          await DAO.addCliente(fd);
+          showToast('Cliente registrado ✅', 'success');
+        }
+        document.getElementById('btn-limpiar').click();
+        cargarClientes();
+      } catch (e) { showToast('Error: ' + e.message, 'error'); }
+      finally { btn.disabled = false; }
+    });
+
+    document.getElementById('btn-limpiar').addEventListener('click', () => {
+      form.reset();
+      editId = null;
+      document.getElementById('btn-guardar').textContent = '💾 Guardar';
+      document.getElementById('form-title-cli').textContent = 'Registrar Cliente';
+    });
+
+    document.getElementById('btn-recargar').addEventListener('click', cargarClientes);
+    cargarClientes();
+  </script>
+</body>
+</html>

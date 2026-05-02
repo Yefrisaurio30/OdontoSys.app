@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OdontoSys — Odontólogos</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div class="management-page">
+    <div id="toast-container"></div>
+    <div id="top-bar-container"></div>
+
+    <div class="page-header">
+      <div>
+        <h2>🩺 Panel de Odontólogos</h2>
+        <div class="subtitle">Registro y gestión del equipo profesional</div>
+      </div>
+    </div>
+
+    <!-- Formulario -->
+    <div class="form-section">
+      <div class="form-section-title">
+        <span class="icon-diente">✏️</span>
+        <span id="form-title">Nuevo Odontólogo</span>
+      </div>
+
+      <div class="form-grid-4">
+        <div class="form-group">
+          <label class="form-label">Nombre *</label>
+          <input id="txt-nombre" type="text" class="form-input" placeholder="Nombre" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Apellido *</label>
+          <input id="txt-apellido" type="text" class="form-input" placeholder="Apellido" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Especialidad *</label>
+          <input id="txt-especialidad" type="text" class="form-input" placeholder="Ej. Ortodoncia" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Teléfono</label>
+          <input id="txt-telefono" type="tel" class="form-input" placeholder="3XX XXX XXXX" />
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button id="btn-add" class="btn btn-primary">➕ Agregar</button>
+        <button id="btn-update" class="btn btn-secondary" disabled>💾 Actualizar</button>
+        <button id="btn-delete" class="btn btn-danger" disabled>🗑 Eliminar</button>
+        <button id="btn-clear" class="btn btn-ghost">✕ Limpiar</button>
+      </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="content-area">
+      <div class="table-wrapper">
+        <div class="table-actions">
+          <div style="font-size:.8rem;color:var(--gris-texto);" id="table-count">0 odontólogos</div>
+          <input type="text" id="search" class="form-input" placeholder="🔍 Buscar…" style="width:220px;" />
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nombre</th>
+              <th>Apellido</th>
+              <th>Especialidad</th>
+              <th>Teléfono</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="confirm-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <h3 id="confirm-title">¿Confirmar acción?</h3>
+        <p id="confirm-message">Esta acción no se puede deshacer.</p>
+        <div class="modal-actions">
+          <button id="confirm-no" class="btn btn-ghost">Cancelar</button>
+          <button id="confirm-yes" class="btn btn-danger">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="DAOHybrid.js"></script>
+  <script>
+    if (!Session.requireAdmin()) throw 'no admin';
+    document.getElementById('top-bar-container').innerHTML = renderTopBar('Odontólogos');
+
+    // Restricciones en tiempo real
+    const restrictLetters = (e) => e.target.value = e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
+    const restrictNumbers = (e) => e.target.value = e.target.value.replace(/[^0-9]/g, '');
+    document.getElementById('txt-nombre').addEventListener('input', restrictLetters);
+    document.getElementById('txt-apellido').addEventListener('input', restrictLetters);
+    document.getElementById('txt-telefono').addEventListener('input', restrictNumbers);
+
+    let selectedId = null;
+    let all = [];
+
+    function render(list) {
+      const tbody = document.getElementById('tabla-body');
+      document.getElementById('table-count').textContent = `${list.length} odontólogo${list.length !== 1 ? 's' : ''}`;
+
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><span class="icon">🩺</span>No hay odontólogos registrados.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(o => `
+        <tr class="${String(o.id) === String(selectedId) ? 'selected' : ''}" data-id="${o.id}">
+          <td style="font-size:.72rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;" title="${o.id}">${String(o.id).substring(0,10)}…</td>
+          <td><strong>${o.nombre}</strong></td>
+          <td>${o.apellido}</td>
+          <td>${o.especialidad || '—'}</td>
+          <td>${o.telefono || '—'}</td>
+        </tr>`).join('');
+
+      tbody.querySelectorAll('tr[data-id]').forEach(row =>
+        row.addEventListener('click', () => selectRow(row.dataset.id)));
+    }
+
+    async function load() {
+      all = await DAO.getOdontologos();
+      applySearch();
+    }
+
+    function applySearch() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const filtered = q
+        ? all.filter(o =>
+          `${o.nombre} ${o.apellido}`.toLowerCase().includes(q) ||
+          (o.especialidad || '').toLowerCase().includes(q))
+        : all;
+      render(filtered);
+    }
+
+    function selectRow(id) {
+      selectedId = String(id);
+      const o = all.find(x => String(x.id) === selectedId);
+      if (!o) return;
+      document.getElementById('txt-nombre').value       = o.nombre;
+      document.getElementById('txt-apellido').value     = o.apellido;
+      document.getElementById('txt-especialidad').value = o.especialidad || '';
+      document.getElementById('txt-telefono').value     = o.telefono || '';
+      document.getElementById('form-title').textContent = 'Editar Odontólogo';
+      document.getElementById('btn-update').disabled = false;
+      document.getElementById('btn-delete').disabled = false;
+      applySearch();
+    }
+
+    function clearForm() {
+      selectedId = null;
+      ['txt-nombre', 'txt-apellido', 'txt-especialidad', 'txt-telefono'].forEach(id =>
+        document.getElementById(id).value = '');
+      document.getElementById('form-title').textContent = 'Nuevo Odontólogo';
+      document.getElementById('btn-update').disabled = true;
+      document.getElementById('btn-delete').disabled = true;
+      applySearch();
+    }
+
+    document.getElementById('btn-add').addEventListener('click', async () => {
+      const nombre = document.getElementById('txt-nombre').value.trim();
+      const apellido = document.getElementById('txt-apellido').value.trim();
+      const especialidad = document.getElementById('txt-especialidad').value.trim();
+      if (!nombre || !apellido || !especialidad) {
+        showToast('Nombre, apellido y especialidad son obligatorios.', 'warning'); return;
+      }
+      await DAO.addOdontologo({ nombre, apellido, especialidad, telefono: document.getElementById('txt-telefono').value.trim() });
+      showToast('Odontólogo agregado.', 'success');
+      clearForm(); await load();
+    });
+
+    document.getElementById('btn-update').addEventListener('click', async () => {
+      if (!selectedId) return;
+      await DAO.updateOdontologo({
+        id: selectedId,
+        nombre:       document.getElementById('txt-nombre').value.trim(),
+        apellido:     document.getElementById('txt-apellido').value.trim(),
+        especialidad: document.getElementById('txt-especialidad').value.trim(),
+        telefono:     document.getElementById('txt-telefono').value.trim(),
+      });
+      showToast('Odontólogo actualizado.', 'success');
+      clearForm(); await load();
+    });
+
+    document.getElementById('btn-delete').addEventListener('click', async () => {
+      if (!selectedId) return;
+      const o = all.find(x => String(x.id) === String(selectedId));
+      const ok = await confirmDialog('Eliminar Odontólogo', `¿Eliminar a Dr. ${o.nombre} ${o.apellido}?`);
+      if (!ok) return;
+      await DAO.deleteOdontologo(selectedId);
+      showToast('Odontólogo eliminado.', 'success');
+      clearForm(); await load();
+    });
+
+    document.getElementById('btn-clear').addEventListener('click', clearForm);
+    document.getElementById('search').addEventListener('input', applySearch);
+
+    load();
+  </script>
+</body>
+
+</html>

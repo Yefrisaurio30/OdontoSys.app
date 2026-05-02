@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OdontoSys — Pacientes</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div class="management-page">
+    <div id="toast-container"></div>
+    <div id="top-bar-container"></div>
+
+    <!-- Encabezado -->
+    <div class="page-header">
+      <div>
+        <h2>👥 Directorio de Pacientes</h2>
+        <div class="subtitle">Gestión de expedientes y datos de pacientes</div>
+      </div>
+    </div>
+
+    <!-- Sección del formulario -->
+    <div class="form-section">
+      <div class="form-section-title">
+        <span class="icon-diente">✏️</span>
+        <span id="form-title">Nuevo Paciente</span>
+      </div>
+
+      <div class="form-grid-4">
+        <div class="form-group">
+          <label class="form-label">Nombre *</label>
+          <input id="txt-nombre" type="text" class="form-input" placeholder="Nombre" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Apellido *</label>
+          <input id="txt-apellido" type="text" class="form-input" placeholder="Apellido" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">DNI / CC *</label>
+          <input id="txt-dni" type="text" class="form-input" placeholder="Documento" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Teléfono</label>
+          <input id="txt-tel" type="tel" class="form-input" placeholder="3XX XXX XXXX" />
+        </div>
+        <div class="form-group col-span-2">
+          <label class="form-label">Email</label>
+          <input id="txt-email" type="email" class="form-input" placeholder="correo@dominio.com" />
+        </div>
+        <div class="form-group col-span-2">
+          <label class="form-label">Historial Médico</label>
+          <textarea id="txt-historial" class="form-textarea" placeholder="Alergias, condiciones previas…"
+            style="min-height:60px;"></textarea>
+        </div>
+        <div class="form-group col-span-2">
+          <label class="form-label">Documento RUT (PDF)</label>
+          <input id="txt-rut" type="file" class="form-input" accept=".pdf" />
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button id="btn-add" class="btn btn-primary">➕ Agregar</button>
+        <button id="btn-update" class="btn btn-secondary" disabled>💾 Actualizar</button>
+        <button id="btn-delete" class="btn btn-danger" disabled>🗑 Eliminar</button>
+        <button id="btn-clear" class="btn btn-ghost">✕ Limpiar</button>
+      </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="content-area">
+      <div class="table-wrapper">
+        <div class="table-actions">
+          <div style="font-size:.8rem;color:var(--gris-texto);" id="table-count">0 pacientes</div>
+          <input type="text" id="search" class="form-input" placeholder="🔍 Buscar por nombre o DNI…"
+            style="width:240px;" />
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nombre</th>
+              <th>Apellido</th>
+              <th>DNI</th>
+              <th>Teléfono</th>
+              <th>Email</th>
+              <th>Registro</th>
+              <th>RUT (PDF)</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-body">
+            <tr>
+              <td colspan="8" class="empty-state"><span class="icon">👥</span>Cargando pacientes…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Modal confirmación -->
+    <div id="confirm-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <h3 id="confirm-title">¿Confirmar acción?</h3>
+        <p id="confirm-message">Esta acción no se puede deshacer.</p>
+        <div class="modal-actions">
+          <button id="confirm-no" class="btn btn-ghost">Cancelar</button>
+          <button id="confirm-yes" class="btn btn-danger">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="DAOHybrid.js"></script>
+  <script>
+    if (!Session.requireAdmin()) throw 'no admin';
+    document.getElementById('top-bar-container').innerHTML = renderTopBar('Pacientes');
+
+    // Restricciones en tiempo real
+    const restrictLetters = (e) => e.target.value = e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
+    const restrictNumbers = (e) => e.target.value = e.target.value.replace(/[^0-9]/g, '');
+    document.getElementById('txt-nombre').addEventListener('input', restrictLetters);
+    document.getElementById('txt-apellido').addEventListener('input', restrictLetters);
+    document.getElementById('txt-dni').addEventListener('input', restrictNumbers);
+    document.getElementById('txt-tel').addEventListener('input', restrictNumbers);
+
+    let selectedId = null;
+    let allPacientes = [];
+
+    function render(list) {
+      const tbody = document.getElementById('tabla-body');
+      document.getElementById('table-count').textContent = `${list.length} paciente${list.length !== 1 ? 's' : ''}`;
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><span class="icon">👥</span>No se encontraron pacientes.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(p => `
+        <tr class="${String(p.id) === String(selectedId) ? 'selected' : ''}" data-id="${p.id}">
+          <td style="font-size:.72rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;" title="${p.id}">${String(p.id).substring(0,10)}…</td>
+          <td><strong>${p.nombre}</strong></td>
+          <td>${p.apellido}</td>
+          <td>${p.dni}</td>
+          <td>${p.telefono || '—'}</td>
+          <td>${p.email || '—'}</td>
+          <td style="font-size:.75rem;">${p.fechaRegistro ? new Date(p.fechaRegistro).toLocaleString('es-CO') : '—'}</td>
+          <td>
+            ${p.rut_pdf 
+              ? `<a href="/api/clientes/rut/${p.rut_pdf}?token=${localStorage.getItem('token')}" target="_blank" class="btn btn-ghost btn-sm">📄 Ver</a>` 
+              : '<span style="color:#ccc;font-size:0.8rem;">—</span>'}
+          </td>
+        </tr>`).join('');
+      tbody.querySelectorAll('tr[data-id]').forEach(row =>
+        row.addEventListener('click', () => selectRow(row.dataset.id)));
+    }
+
+    async function loadPacientes() {
+      try {
+        allPacientes = await DAO.getPacientes();
+        applySearch();
+      } catch (e) { showToast('Error cargando pacientes: ' + e.message, 'error'); }
+    }
+
+    function applySearch() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const filtered = q ? allPacientes.filter(p =>
+        `${p.nombre} ${p.apellido}`.toLowerCase().includes(q) ||
+        p.dni.toLowerCase().includes(q) ||
+        (p.email || '').toLowerCase().includes(q)) : allPacientes;
+      render(filtered);
+    }
+
+    function selectRow(id) {
+      selectedId = String(id);
+      const p = allPacientes.find(x => String(x.id) === selectedId);
+      if (!p) return;
+      document.getElementById('txt-nombre').value   = p.nombre;
+      document.getElementById('txt-apellido').value = p.apellido;
+      document.getElementById('txt-dni').value      = p.dni;
+      document.getElementById('txt-tel').value      = p.telefono || '';
+      document.getElementById('txt-email').value    = p.email || '';
+      document.getElementById('txt-historial').value = p.historialMedico || '';
+      document.getElementById('form-title').textContent  = 'Editar Paciente';
+      document.getElementById('btn-update').disabled = false;
+      document.getElementById('btn-delete').disabled = false;
+      applySearch();
+    }
+
+    function clearForm() {
+      selectedId = null;
+      ['txt-nombre', 'txt-apellido', 'txt-dni', 'txt-tel', 'txt-email', 'txt-historial'].forEach(id =>
+        document.getElementById(id).value = '');
+      document.getElementById('form-title').textContent  = 'Nuevo Paciente';
+      document.getElementById('btn-update').disabled = true;
+      document.getElementById('btn-delete').disabled = true;
+      applySearch();
+    }
+
+    document.getElementById('btn-add').addEventListener('click', async () => {
+      const nombre = document.getElementById('txt-nombre').value.trim();
+      const apellido = document.getElementById('txt-apellido').value.trim();
+      const dni = document.getElementById('txt-dni').value.trim();
+      if (!nombre || !apellido || !dni) { showToast('Nombre, apellido y DNI son obligatorios.', 'warning'); return; }
+      
+      const fd = new FormData();
+      fd.append('nombre', nombre);
+      fd.append('apellido', apellido);
+      fd.append('cedula', dni);
+      fd.append('telefono', document.getElementById('txt-tel').value.trim());
+      fd.append('email', document.getElementById('txt-email').value.trim());
+      fd.append('historialMedico', document.getElementById('txt-historial').value.trim());
+      
+      const rutFile = document.getElementById('txt-rut').files[0];
+      if (rutFile) fd.append('rut_pdf', rutFile);
+
+      try {
+        const res = await fetch('/api/clientes', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+          body: fd
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al guardar');
+        
+        showToast('Paciente agregado.', 'success');
+        clearForm(); await loadPacientes();
+      } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    });
+
+    document.getElementById('btn-update').addEventListener('click', async () => {
+      if (!selectedId) return;
+      try {
+        await DAO.updatePaciente({
+          id: selectedId,
+          nombre:         document.getElementById('txt-nombre').value.trim(),
+          apellido:       document.getElementById('txt-apellido').value.trim(),
+          dni:            document.getElementById('txt-dni').value.trim(),
+          telefono:       document.getElementById('txt-tel').value.trim(),
+          email:          document.getElementById('txt-email').value.trim(),
+          historialMedico:document.getElementById('txt-historial').value.trim()
+        });
+        showToast('Paciente actualizado.', 'success');
+        clearForm(); await loadPacientes();
+      } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    });
+
+    document.getElementById('btn-delete').addEventListener('click', async () => {
+      if (!selectedId) return;
+      const p = allPacientes.find(x => String(x.id) === String(selectedId));
+      const ok = await confirmDialog('Eliminar Paciente', `¿Eliminar a ${p.nombre} ${p.apellido}?`);
+      if (!ok) return;
+      try {
+        await DAO.deletePaciente(selectedId);
+        showToast('Paciente eliminado.', 'success');
+        clearForm(); await loadPacientes();
+      } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    });
+
+    document.getElementById('btn-clear').addEventListener('click', clearForm);
+    document.getElementById('search').addEventListener('input', applySearch);
+    loadPacientes();
+
+  </script>
+</body>
+
+</html>

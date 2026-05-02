@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OdontoSys — Caja</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="management-page">
+    <div id="toast-container"></div>
+    <div id="top-bar-container"></div>
+
+    <div class="page-header">
+      <div>
+        <h2>💰 Saldo en Caja</h2>
+        <p class="subtitle">Total acumulado de ventas</p>
+      </div>
+    </div>
+
+    <!-- Total -->
+    <div style="background:linear-gradient(135deg,#1e40af,#3b82f6);color:white;padding:30px;border-radius:var(--radio);text-align:center;margin-bottom:20px;">
+      <p style="font-size:0.9rem;opacity:0.9;margin-bottom:8px;">TOTAL ACUMULADO</p>
+      <h1 id="total-caja" style="font-size:2.5rem;margin:0;">$0</h1>
+      <p style="font-size:0.8rem;opacity:0.8;margin-top:8px;">Desde el inicio de operaciones</p>
+    </div>
+
+    <!-- Botón reporte -->
+    <div style="text-align:right;margin-bottom:20px;">
+      <button onclick="descargarPDF()" class="btn btn-pdf">📄 Descargar Reporte PDF</button>
+    </div>
+
+    <!-- Tabla histórica -->
+    <div class="content-area">
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Factura</th>
+              <th>Cliente</th>
+              <th>Fecha</th>
+              <th>Total</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-ventas">
+            <tr><td colspan="5" class="empty-state">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="DAOHybrid.js"></script>
+  <script>
+    if (!localStorage.getItem('token')) window.location.href = 'login.html';
+    document.getElementById('top-bar-container').innerHTML = renderTopBar('Caja');
+
+    async function cargarCaja() {
+      try {
+        const res = await fetch('/api/caja', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const data = await res.json();
+
+        document.getElementById('total-caja').textContent = `$${data.total_acumulado.toLocaleString('es-CO')}`;
+
+        const tbody = document.getElementById('tabla-ventas');
+        if (!data.ventas || data.ventas.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No hay ventas registradas.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.ventas.map(v => `
+          <tr>
+            <td><strong>${v.factura_id}</strong></td>
+            <td>${v.cliente_nombre}</td>
+            <td>${new Date(v.fecha).toLocaleString('es-CO')}</td>
+            <td><strong>$${v.total.toLocaleString('es-CO')}</strong></td>
+            <td>
+              <button onclick="reimprimirFactura('${v.factura_id}')" class="btn btn-ghost btn-sm" title="Reimprimir Factura">📄 Ver PDF</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        showToast('Error cargando caja: ' + e.message, 'error');
+      }
+    }
+
+    function descargarPDF() {
+      const token = localStorage.getItem('token');
+      window.open(`/api/caja/pdf?token=${token}`, '_blank');
+    }
+
+    function reimprimirFactura(facturaId) {
+      const token = localStorage.getItem('token');
+      window.open(`/api/ventas/${facturaId}/pdf?token=${token}`, '_blank');
+    }
+
+    cargarCaja();
+  </script>
+</body>
+</html>

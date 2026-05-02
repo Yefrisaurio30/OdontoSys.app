@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OdontoSys — Ventas</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .seccion { background: white; border-radius: var(--radio); padding: 20px; margin-bottom: 20px; box-shadow: var(--sombra); }
+    .seccion h3 { margin-bottom: 15px; color: var(--azul-principal); }
+    .carrito-item { display: flex; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid #e2e8f0; }
+    .carrito-item span { flex: 1; }
+    .total-text { font-size: 1.2rem; font-weight: 600; color: var(--azul-principal); }
+  </style>
+</head>
+<body>
+  <div class="management-page">
+    <div id="toast-container"></div>
+    <div id="top-bar-container"></div>
+
+    <div class="page-header">
+      <div>
+        <h2>🛒 Venta de Productos</h2>
+        <p class="subtitle">Seleccione cliente y productos para generar factura</p>
+      </div>
+    </div>
+
+    <!-- Zona 1: Selección de cliente -->
+    <div class="seccion">
+      <h3>👤 Cliente</h3>
+      <div style="display:flex;gap:10px;margin-bottom:15px;">
+        <input id="cedula-busqueda" type="text" class="form-input" placeholder="Buscar por cédula..." style="flex:1;" />
+        <button onclick="buscarCliente()" class="btn btn-secondary">🔍 Buscar</button>
+      </div>
+      <div id="info-cliente" style="padding:10px;background:#f8fafc;border-radius:8px;font-size:0.9rem;">
+        No hay cliente seleccionado
+      </div>
+      <button onclick="mostrarRegistroCliente()" class="btn btn-ghost" style="margin-top:10px;">➕ Registrar nuevo cliente</button>
+    </div>
+
+    <!-- Zona 2: Carrito de productos -->
+    <div class="seccion">
+      <h3>📦 Productos</h3>
+      <div style="display:flex;gap:10px;margin-bottom:15px;">
+        <select id="select-producto" class="form-select" style="flex:1;"></select>
+        <input id="cantidad-producto" type="number" class="form-input" min="1" value="1" style="width:80px;" />
+        <button onclick="agregarAlCarrito()" class="btn btn-primary">➕ Agregar</button>
+      </div>
+
+      <div id="carrito-container"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:15px;padding-top:15px;border-top:2px solid #e2e8f0;">
+        <div class="total-text">Total: $<span id="total-venta">0</span></div>
+        <button onclick="registrarVenta()" class="btn btn-primary" style="font-size:1rem;padding:10px 20px;">💳 Registrar Venta</button>
+      </div>
+    </div>
+
+    <div id="confirm-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <h3 id="confirm-title">¿Confirmar?</h3>
+        <p id="confirm-message"></p>
+        <div class="modal-actions">
+          <button id="confirm-no" class="btn btn-ghost">Cancelar</button>
+          <button id="confirm-yes" class="btn btn-danger">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal registro rápido cliente -->
+    <div id="modal-cliente" class="modal-overlay hidden">
+      <div class="modal-box" style="max-width:500px;">
+        <h3>Registrar Cliente</h3>
+        <form id="form-cliente-rapido">
+          <div class="form-group"><label class="form-label">Nombre *</label><input id="cli-nombre" type="text" class="form-input" required /></div>
+          <div class="form-group"><label class="form-label">Apellido *</label><input id="cli-apellido" type="text" class="form-input" required /></div>
+          <div class="form-group"><label class="form-label">Cédula *</label><input id="cli-cedula" type="text" class="form-input" required /></div>
+          <div class="form-group"><label class="form-label">Teléfono</label><input id="cli-telefono" type="tel" class="form-input" /></div>
+          <div class="form-group"><label class="form-label">Email</label><input id="cli-email" type="email" class="form-input" /></div>
+          <div class="form-group">
+            <label class="form-label">Documento RUT (PDF) *</label>
+            <input id="cli-rut" type="file" class="form-input" accept=".pdf" required />
+          </div>
+          <div class="modal-actions">
+            <button type="button" onclick="cerrarModalCliente()" class="btn btn-ghost">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Guardar y Seleccionar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ── Sección de reimpresión ───────────────────────────────────────── -->
+    <div class="seccion">
+      <h3>📄 Historial de ventas — Reimprimir factura</h3>
+      <div class="table-wrapper">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th>Nº Factura</th>
+              <th>Cliente</th>
+              <th>Fecha</th>
+              <th>Total</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-historial">
+            <tr><td colspan="5" style="text-align:center">Cargando historial...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="DAOHybrid.js"></script>
+  <script>
+    if (!localStorage.getItem('token')) window.location.href = 'login.html';
+    document.getElementById('top-bar-container').innerHTML = renderTopBar('Ventas');
+
+    let clienteSeleccionado = null;
+    let carrito = [];
+    let productosDisponibles = [];
+
+    async function cargarProductos() {
+      try {
+        productosDisponibles = await DAO.getProductos();
+        const select = document.getElementById('select-producto');
+        select.innerHTML = productosDisponibles.map(p =>
+          `<option value="${p._id || p.id}">${p.nombre} - $${Number(p.precio).toFixed(2)} (Stock: ${p.stock})</option>`
+        ).join('');
+      } catch (e) { showToast('Error cargando productos: ' + e.message, 'error'); }
+    }
+
+    async function buscarCliente() {
+      const cedula = document.getElementById('cedula-busqueda').value.trim();
+      if (!cedula) return;
+      try {
+        const res = await fetch(`/api/clientes/buscar?cedula=${cedula}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!res.ok) {
+          document.getElementById('info-cliente').innerHTML = 'Cliente no encontrado. <a href="#" onclick="mostrarRegistroCliente();return false;">Registrar nuevo</a>';
+          clienteSeleccionado = null;
+          return;
+        }
+        clienteSeleccionado = await res.json();
+        document.getElementById('info-cliente').innerHTML =
+          `<strong>${clienteSeleccionado.nombre} ${clienteSeleccionado.apellido}</strong><br/>CC: ${clienteSeleccionado.cedula}`;
+      } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    }
+
+    function mostrarRegistroCliente() {
+      document.getElementById('modal-cliente').classList.remove('hidden');
+    }
+
+    function cerrarModalCliente() {
+      document.getElementById('modal-cliente').classList.add('hidden');
+    }
+
+    document.getElementById('form-cliente-rapido').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData();
+      fd.append('nombre', document.getElementById('cli-nombre').value);
+      fd.append('apellido', document.getElementById('cli-apellido').value);
+      fd.append('cedula', document.getElementById('cli-cedula').value);
+      fd.append('telefono', document.getElementById('cli-telefono').value);
+      fd.append('email', document.getElementById('cli-email').value);
+      
+      const rutFile = document.getElementById('cli-rut').files[0];
+      if (rutFile) fd.append('rut_pdf', rutFile);
+
+      try {
+        const res = await fetch('/api/clientes', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+          body: fd
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error registrando cliente');
+        
+        clienteSeleccionado = { 
+          _id: data.id, 
+          nombre: document.getElementById('cli-nombre').value, 
+          apellido: document.getElementById('cli-apellido').value, 
+          cedula: document.getElementById('cli-cedula').value 
+        };
+        document.getElementById('info-cliente').innerHTML =
+          `<strong>${clienteSeleccionado.nombre} ${clienteSeleccionado.apellido}</strong><br/>CC: ${clienteSeleccionado.cedula}`;
+        cerrarModalCliente();
+        showToast('Cliente registrado y seleccionado ✅', 'success');
+      } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    });
+
+    function agregarAlCarrito() {
+      const productoId = document.getElementById('select-producto').value;
+      const cantidad = parseInt(document.getElementById('cantidad-producto').value) || 1;
+      const producto = productosDisponibles.find(p => (p._id || p.id) === productoId);
+      if (!producto) return;
+
+      const existente = carrito.find(i => (i.producto_id) === productoId);
+      if (existente) {
+        existente.cantidad += cantidad;
+      } else {
+        carrito.push({ producto_id: productoId, nombre: producto.nombre, cantidad, precio: producto.precio });
+      }
+      renderCarrito();
+    }
+
+    function renderCarrito() {
+      const container = document.getElementById('carrito-container');
+      if (carrito.length === 0) {
+        container.innerHTML = '<p style="color:#64748B;text-align:center;">El carrito está vacío</p>';
+        document.getElementById('total-venta').textContent = '0';
+        return;
+      }
+
+      let total = 0;
+      container.innerHTML = carrito.map((item, idx) => {
+        const subtotal = item.cantidad * item.precio;
+        total += subtotal;
+        return `<div class="carrito-item">
+          <span>${item.nombre}</span>
+          <span>${item.cantidad} x $${Number(item.precio).toFixed(2)}</span>
+          <span><strong>$${subtotal.toFixed(2)}</strong></span>
+          <button onclick="eliminarDelCarrito(${idx})" style="background:none;border:none;cursor:pointer;">🗑️</button>
+        </div>`;
+      }).join('');
+
+      document.getElementById('total-venta').textContent = total.toFixed(2);
+    }
+
+    function eliminarDelCarrito(idx) {
+      carrito.splice(idx, 1);
+      renderCarrito();
+    }
+
+    async function registrarVenta() {
+      if (!clienteSeleccionado) return alert('Seleccione un cliente primero');
+      if (carrito.length === 0) return alert('Agregue al menos un producto');
+
+      const body = {
+        cliente_id: clienteSeleccionado._id,
+        items: carrito.map(i => ({ producto_id: i.producto_id, cantidad: i.cantidad }))
+      };
+
+      try {
+        const res = await fetch('/api/ventas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error registrando venta');
+
+        alert(`Venta registrada. Factura: ${data.factura_id}`);
+        const token = localStorage.getItem('token');
+        window.open(`/api/ventas/${data.factura_id}/pdf?token=${token}`, '_blank');
+        carrito = [];
+        renderCarrito();
+        cargarProductos();
+        cargarHistorial();
+      } catch (e) { showToast('Error: ' + e.message, 'error'); }
+    }
+
+    async function cargarHistorial() {
+      try {
+        const res = await fetch('/api/ventas', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const ventas = await res.json();
+        const tbody = document.getElementById('tbody-historial');
+        tbody.innerHTML = '';
+
+        if (!ventas || ventas.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">Sin ventas registradas</td></tr>';
+          return;
+        }
+
+        ventas.forEach(v => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${v.factura_id}</td>
+            <td>${v.cliente_nombre}<br><small>CC: ${v.cliente_cedula}</small></td>
+            <td>${new Date(v.fecha).toLocaleString('es-CO')}</td>
+            <td>$${v.total.toLocaleString()}</td>
+            <td>
+              <button onclick="reimprimirFactura('${v.factura_id}')" class="btn btn-ghost btn-sm">
+                🖨️ Reimprimir
+              </button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (e) { console.error('Error cargando historial:', e); }
+    }
+
+    function reimprimirFactura(facturaId) {
+      const token = localStorage.getItem('token');
+      window.open(`/api/ventas/${facturaId}/pdf?token=${token}`, '_blank');
+    }
+
+    cargarProductos();
+    cargarHistorial();
+  </script>
+</body>
+</html>

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OdontoSys — Usuarios</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div class="management-page">
+    <div id="toast-container"></div>
+    <div id="top-bar-container"></div>
+
+    <div class="page-header">
+      <div>
+        <h2>🔐 Gestión de Usuarios</h2>
+        <div class="subtitle">Cuentas de acceso y roles del sistema</div>
+      </div>
+    </div>
+
+    <!-- Formulario -->
+    <div class="form-section">
+      <div class="form-section-title">
+        <span class="icon-diente">✏️</span>
+        <span id="form-title">Nuevo Usuario</span>
+      </div>
+
+      <div class="form-grid-4">
+        <div class="form-group">
+          <label class="form-label">Usuario *</label>
+          <input id="txt-username" type="text" class="form-input" placeholder="nombre_usuario" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contraseña *</label>
+          <input id="txt-password" type="password" class="form-input" placeholder="••••••" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Rol</label>
+          <select id="sel-rol" class="form-select">
+            <option value="USUARIO">USUARIO</option>
+            <option value="ADMIN">ADMIN</option>
+          </select>
+        </div>
+        <div class="form-group" style="display:flex;align-items:flex-end;">
+          <div class="btn-group" style="width:100%;">
+            <button id="btn-add" class="btn btn-primary">➕ Agregar</button>
+            <button id="btn-update" class="btn btn-secondary" disabled>💾 Actualizar</button>
+            <button id="btn-delete" class="btn btn-danger" disabled>🗑 Eliminar</button>
+            <button id="btn-clear" class="btn btn-ghost">✕ Limpiar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="content-area">
+      <div class="table-wrapper">
+        <div class="table-actions">
+          <div style="font-size:.8rem;color:var(--gris-texto);" id="table-count">0 usuarios</div>
+          <div style="display:flex;gap:10px;">
+            <button id="btn-toggle-all" class="btn btn-ghost btn-sm">🔓 Ver todo</button>
+            <input type="text" id="search" class="form-input" placeholder="🔍 Buscar usuario…" style="width:220px;" />
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Usuario</th>
+              <th>Rol</th>
+              <th>Contraseña</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tabla-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="confirm-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <h3 id="confirm-title">¿Confirmar acción?</h3>
+        <p id="confirm-message">Esta acción no se puede deshacer.</p>
+        <div class="modal-actions">
+          <button id="confirm-no" class="btn btn-ghost">Cancelar</button>
+          <button id="confirm-yes" class="btn btn-danger">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="DAOHybrid.js"></script>
+  <script>
+    if (!Session.requireAdmin()) throw 'no admin';
+    document.getElementById('top-bar-container').innerHTML = renderTopBar('Usuarios');
+
+    // Restricción: solo letras en el nombre de usuario (sin números ni símbolos)
+    document.getElementById('txt-username').addEventListener('input', (e) => {
+      e.target.value = e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
+    });
+
+    const sessionUser = Session.get();
+    let showAllPasswords = false;
+    let visibleIds = new Set();
+    let all = [];
+    let selectedId = -1;
+
+    function render(list) {
+      const tbody = document.getElementById('tabla-body');
+      document.getElementById('table-count').textContent = `${list.length} usuario${list.length !== 1 ? 's' : ''}`;
+
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><span class="icon">🔐</span>No hay usuarios.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(u => {
+        const isVisible = showAllPasswords || visibleIds.has(u.id);
+
+        // hash: lo que está guardado en la DB (encriptado/hash)
+        const hashVal  = u.password_hash || u.password || '—';
+        // plain: el texto real desencriptado que devuelve el RPC
+        const plainVal = u.plain_password || '(Hash antiguo — no recuperable)';
+
+        const passCell = isVisible
+          ? `<div style="display:flex;flex-direction:column;gap:3px;">
+               <span style="font-size:0.72rem;color:#888;">🔒 Hash (DB):</span>
+               <span style="font-family:monospace;font-size:0.70rem;word-break:break-all;color:#999;">${hashVal}</span>
+               <span style="font-size:0.72rem;color:#888;margin-top:4px;">🔓 Texto real:</span>
+               <span style="font-family:monospace;font-weight:700;color:var(--azul,#2563eb);">${plainVal}</span>
+             </div>`
+          : `<span style="font-family:monospace;letter-spacing:3px;color:#aaa;">••••••••</span>`;
+
+        return `
+        <tr class="${u.id === selectedId ? 'selected' : ''}" data-id="${u.id}">
+          <td>${u.id}</td>
+          <td><strong>${u.username}</strong>${u.id === sessionUser.id ? ' <span class="badge badge-admin">Tú</span>' : ''}</td>
+          <td><span class="badge ${u.rol === 'ADMIN' ? 'badge-admin' : 'badge-user'}">${u.rol}</span></td>
+          <td style="max-width:380px;">${passCell}</td>
+          <td>
+            <button class="btn-eye" onclick="toggleRowPass(${u.id}, event)" title="${isVisible ? 'Ocultar' : 'Ver contraseña'}">
+              ${isVisible ? '🔐' : '🔓'}
+            </button>
+          </td>
+        </tr>`;
+      }).join('');
+
+      tbody.querySelectorAll('tr[data-id]').forEach(row =>
+        row.addEventListener('click', () => selectRow(row.dataset.id)));
+    }
+
+    function toggleRowPass(id, event) {
+      event.stopPropagation();
+      const idStr = String(id);
+      if (visibleIds.has(idStr)) visibleIds.delete(idStr);
+      else visibleIds.add(idStr);
+      applySearch();
+    }
+
+    async function load() {
+      all = await DAO.getUsuarios();
+      applySearch();
+    }
+
+    function applySearch() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const filtered = q ? all.filter(u => u.username.toLowerCase().includes(q)) : all;
+      render(filtered);
+    }
+
+    function selectRow(id) {
+      const idStr = String(id);
+      selectedId = idStr;
+      const u = all.find(x => String(x.id) === idStr);
+      if (!u) return;
+      document.getElementById('txt-username').value = u.username;
+      document.getElementById('txt-username').readOnly = true; // No permitir cambiar nombre
+      document.getElementById('txt-username').style.backgroundColor = '#f1f5f9';
+      document.getElementById('txt-password').value = '';
+      document.getElementById('sel-rol').value = u.rol;
+      document.getElementById('form-title').textContent = 'Editar Usuario';
+      document.getElementById('btn-update').disabled = false;
+      document.getElementById('btn-delete').disabled = (id === sessionUser.id);
+      applySearch();
+    }
+
+    function clearForm() {
+      selectedId = -1;
+      document.getElementById('txt-username').value = '';
+      document.getElementById('txt-username').readOnly = false;
+      document.getElementById('txt-username').style.backgroundColor = '';
+      document.getElementById('txt-password').value = '';
+      document.getElementById('sel-rol').value = 'USUARIO';
+      document.getElementById('form-title').textContent = 'Nuevo Usuario';
+      document.getElementById('btn-update').disabled = true;
+      document.getElementById('btn-delete').disabled = true;
+      applySearch();
+    }
+
+    document.getElementById('btn-add').addEventListener('click', async () => {
+      const username = document.getElementById('txt-username').value.trim();
+      const password = document.getElementById('txt-password').value;
+      const rol = document.getElementById('sel-rol').value;
+      if (!username || !password) { showToast('Usuario y contraseña son obligatorios.', 'warning'); return; }
+      if (all.find(u => u.username === username)) { showToast('El usuario ya existe.', 'error'); return; }
+      await DAO.addUsuario({ username, password, rol });
+      showToast('Usuario creado.', 'success');
+      clearForm(); await load();
+    });
+
+    document.getElementById('btn-update').addEventListener('click', async () => {
+      if (selectedId === -1) return;
+      const data = {
+        id: selectedId,
+        username: document.getElementById('txt-username').value.trim(),
+        rol: document.getElementById('sel-rol').value,
+      };
+      const newPass = document.getElementById('txt-password').value;
+      if (newPass) data.password = newPass;
+      await DAO.updateUsuario(data);
+      showToast('Usuario actualizado.', 'success');
+      clearForm(); await load();
+    });
+
+    document.getElementById('btn-delete').addEventListener('click', async () => {
+      if (selectedId === -1 || selectedId === sessionUser.id) return;
+      const u = all.find(x => x.id === selectedId);
+      const ok = await confirmDialog('Eliminar Usuario', `¿Eliminar al usuario "${u.username}"?`);
+      if (!ok) return;
+      await DAO.deleteUsuario(selectedId);
+      showToast('Usuario eliminado.', 'success');
+      clearForm(); await load();
+    });
+
+    document.getElementById('btn-clear').addEventListener('click', clearForm);
+    document.getElementById('search').addEventListener('input', applySearch);
+
+    document.getElementById('btn-toggle-all').onclick = () => {
+      showAllPasswords = !showAllPasswords;
+      if (showAllPasswords) visibleIds = new Set(all.map(u => u.id));
+      else visibleIds.clear();
+      document.getElementById('btn-toggle-all').innerHTML = showAllPasswords ? '🔐 Ocultar todo' : '🔓 Ver todo';
+      applySearch();
+    };
+
+    window.toggleRowPass = (id, e) => toggleRowPass(id, e);
+    load();
+  </script>
+</body>
+
+</html>

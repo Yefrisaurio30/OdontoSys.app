@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OdontoSys — Registro</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .reg-card { width: 100%; max-width: 520px; }
+    .reg-header { display: flex; align-items: center; gap: 14px; margin-bottom: 32px; }
+    .reg-header .icon {
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, var(--azul-primario), var(--azul-oscuro));
+      border-radius: 14px; display: flex; align-items: center;
+      justify-content: center; font-size: 1.3rem; flex-shrink: 0;
+    }
+    .reg-header h1 { font-size: 1.4rem; color: var(--texto); }
+    .reg-header p  { font-size: 0.8rem; color: var(--gris-texto); margin-top: 2px; }
+    .section-label {
+      font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--azul-oscuro);
+      padding: 10px 0 6px; border-top: 1px solid var(--gris-borde); margin-top: 8px;
+    }
+    .section-label:first-of-type { border-top: none; margin-top: 0; }
+    .login-link { text-align: center; margin-top: 18px; font-size: 0.875rem; color: var(--gris-texto); }
+    .login-link a { color: var(--azul-primario); font-weight: 600; text-decoration: none; }
+    .login-link a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="page-center">
+    <div id="toast-container"></div>
+
+    <div class="card reg-card">
+      <div class="reg-header">
+        <div class="icon">📋</div>
+        <div>
+          <h1>Crear Cuenta</h1>
+          <p>Sistema de Odontología — Registro de Paciente</p>
+        </div>
+      </div>
+
+      <form id="registro-form" novalidate>
+        <p class="section-label">Datos de acceso</p>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="reg-username">Usuario *</label>
+            <input id="reg-username" type="text" class="form-input" placeholder="nombre_usuario" autocomplete="username" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reg-password">Contraseña *</label>
+            <input id="reg-password" type="password" class="form-input" placeholder="Mínimo 6 caracteres" />
+          </div>
+          <div class="form-group col-span-2">
+            <label class="form-label" for="reg-email">Correo Electrónico (Gmail) *</label>
+            <input id="reg-email" type="email" class="form-input" placeholder="ejemplo@gmail.com" />
+          </div>
+        </div>
+
+        <p class="section-label">Datos personales</p>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label" for="reg-nombre">Nombre *</label>
+            <input id="reg-nombre" type="text" class="form-input" placeholder="Tu nombre" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reg-apellido">Apellido *</label>
+            <input id="reg-apellido" type="text" class="form-input" placeholder="Tu apellido" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reg-dni">DNI / CC *</label>
+            <input id="reg-dni" type="text" class="form-input" placeholder="Número de documento" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reg-telefono">Teléfono</label>
+            <input id="reg-telefono" type="tel" class="form-input" placeholder="3XX XXX XXXX" />
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" style="margin-top:12px;">
+          Crear Cuenta
+        </button>
+      </form>
+
+      <div class="login-link">
+        ¿Ya tienes cuenta? <a href="index.html">Inicia sesión</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="DAOHybrid.js"></script>
+  <script>
+    // Redirigir si ya hay sesión activa
+    if (Session.get()) window.location.href = 'menu.html';
+
+    // Restricciones en tiempo real (evitar escribir caracteres inválidos)
+    const restrictLetters = (e) => e.target.value = e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
+    const restrictNumbers = (e) => e.target.value = e.target.value.replace(/[^0-9]/g, '');
+
+    document.getElementById('reg-username').addEventListener('input', restrictLetters);
+    document.getElementById('reg-nombre').addEventListener('input', restrictLetters);
+    document.getElementById('reg-apellido').addEventListener('input', restrictLetters);
+    document.getElementById('reg-dni').addEventListener('input', restrictNumbers);
+    document.getElementById('reg-telefono').addEventListener('input', restrictNumbers);
+
+    document.getElementById('registro-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const username = document.getElementById('reg-username').value.trim();
+      const password = document.getElementById('reg-password').value;
+      const email    = document.getElementById('reg-email').value.trim();
+      const nombre   = document.getElementById('reg-nombre').value.trim();
+      const apellido = document.getElementById('reg-apellido').value.trim();
+      const dni      = document.getElementById('reg-dni').value.trim();
+      const telefono = document.getElementById('reg-telefono').value.trim();
+
+      if (!username || !password || !email || !nombre || !apellido || !dni) {
+        showToast('Completa todos los campos obligatorios (*).', 'warning');
+        return;
+      }
+
+      // Validación de Gmail
+      if (!email.toLowerCase().endsWith('@gmail.com')) {
+        showToast('Solo se permiten correos de @gmail.com para la recuperación de cuenta.', 'warning');
+        return;
+      }
+
+      // Validaciones personalizadas
+      const soloLetras = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
+      const soloNumeros = /^[0-9]+$/;
+
+      if (!soloLetras.test(nombre)) {
+        showToast('El nombre no puede contener números ni caracteres especiales.', 'warning');
+        return;
+      }
+      if (!soloLetras.test(apellido)) {
+        showToast('El apellido no puede contener números ni caracteres especiales.', 'warning');
+        return;
+      }
+      if (!soloNumeros.test(dni)) {
+        showToast('El DNI/CC solo debe contener números.', 'warning');
+        return;
+      }
+      if (telefono && !soloNumeros.test(telefono)) {
+        showToast('El teléfono solo debe contener números.', 'warning');
+        return;
+      }
+      if (telefono && telefono.length < 10) {
+        showToast('El teléfono debe tener al menos 10 dígitos.', 'warning');
+        return;
+      }
+
+      if (password.length < 6) {
+        showToast('La contraseña debe tener al menos 6 caracteres.', 'warning');
+        return;
+      }
+
+      const btn = e.target.querySelector('button[type=submit]');
+      btn.disabled = true;
+      btn.textContent = 'Creando cuenta…';
+
+      try {
+        await DAO.registrar(username, password, nombre, apellido, dni, telefono, email);
+        showToast('¡Cuenta creada! Redirigiendo al login...', 'success');
+        setTimeout(() => window.location.href = 'index.html', 1500);
+      } catch (err) {
+        showToast(err.message || 'Error al crear cuenta.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Crear Cuenta';
+      }
+    });
+  </script>
+</body>
+</html>

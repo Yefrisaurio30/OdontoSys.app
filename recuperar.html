@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OdontoSys — Recuperar Contraseña</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .recovery-card { width: 100%; max-width: 480px; }
+    .icon-box {
+      width: 60px; height: 60px; background: var(--azul-claro);
+      border-radius: 16px; display: flex; align-items: center;
+      justify-content: center; font-size: 1.8rem; margin: 0 auto 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-center">
+    <div id="toast-container"></div>
+    <div class="card recovery-card">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <div class="icon-box">🔑</div>
+        <h2 style="font-family: 'DM Serif Display', serif; font-size: 1.5rem;">Recuperar acceso</h2>
+        <p style="color: var(--gris-texto); font-size: 0.9rem; margin-top: 8px;">
+          Ingresa tu usuario (correo) para enviarte un enlace de recuperación.
+        </p>
+      </div>
+
+      <form id="recuperar-form">
+        <div class="form-group">
+          <label class="form-label" for="email">Usuario / Correo Electrónico</label>
+          <input type="text" id="email" class="form-input" placeholder="ejemplo@correo.com" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">Enviar enlace</button>
+      </form>
+
+      <div style="text-align: center; margin-top: 24px;">
+        <a href="index.html" style="color: var(--azul-primario); font-weight: 600; text-decoration: none; font-size: 0.9rem;">
+          ← Volver al inicio de sesión
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="DAOHybrid.js"></script>
+  <script>
+    document.getElementById('recuperar-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value.trim();
+      const btn = e.target.querySelector('button');
+      
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+      
+      try {
+        await DAO.recuperar(email);
+        showToast('Si el usuario existe, se ha enviado un correo con instrucciones.', 'success');
+        setTimeout(() => window.location.href = 'index.html', 3000);
+      } catch (err) {
+        showToast(err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Enviar enlace';
+      }
+    };
+  </script>
+</body>
+</html>
