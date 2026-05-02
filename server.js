@@ -50,64 +50,49 @@ if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
 }
 
 // ═══════════════ SISTEMA DE EMAIL ═══════════════
+// Render bloquea TODOS los puertos SMTP (25, 465, 587).
+// Solución definitiva: Brevo HTTP API — no usa puertos SMTP, funciona en Render.
+// REQUISITO: en Brevo → Security → Authorised IPs, la lista debe estar VACÍA (sin restricción).
 async function sendEmail({ to, subject, html }) {
-  const nodemailer = require('nodemailer');
+  const brevoKey = process.env.BREVO_API_KEY;
 
-  console.log(`📤 Intentando enviar email a: ${to}`);
-  console.log(`   BREVO_SMTP_USER: ${process.env.BREVO_SMTP_USER ? '✅ SET' : '❌ MISSING'}`);
-  console.log(`   BREVO_SMTP_PASS: ${process.env.BREVO_SMTP_PASS ? '✅ SET' : '❌ MISSING'}`);
+  console.log(`📤 Enviando email a: ${to}`);
+  console.log(`   BREVO_API_KEY: ${brevoKey ? '✅ SET' : '❌ MISSING'}`);
 
-  if (process.env.BREVO_SMTP_PASS) {
-    const transporter = nodemailer.createTransport({
-      host: 'smtp-relay.brevo.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.BREVO_SMTP_USER,
-        pass: process.env.BREVO_SMTP_PASS
-      },
-      connectionTimeout: 15000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000
-    });
-
-    // Verificar conexión antes de enviar
-    await transporter.verify();
-    console.log('✅ Conexión Brevo SMTP verificada');
-
-    const info = await transporter.sendMail({
-      from: `OdontoSys <${process.env.BREVO_SMTP_USER}>`,
-      to,
-      subject,
-      html
-    });
-    console.log('✅ Email enviado via Brevo SMTP a:', to, '| ID:', info.messageId);
-    return info;
-
-  } else {
-    console.warn('⚠️ BREVO_SMTP_PASS no configurada en Render. Usando Gmail (solo funciona en local).');
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      },
-      tls: { rejectUnauthorized: false }
-    });
-    return await transporter.sendMail({
-      from: `OdontoSys <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      html
-    });
+  if (!brevoKey) {
+    throw new Error('BREVO_API_KEY no está configurada en las variables de entorno de Render');
   }
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'accept': 'application/json',
+      'api-key': brevoKey,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      sender: { name: 'OdontoSys', email: process.env.BREVO_SMTP_USER || process.env.EMAIL_USER },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html
+    })
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error('❌ Error Brevo API:', JSON.stringify(data));
+    throw new Error(data.message || `Error Brevo: ${response.status}`);
+  }
+
+  console.log('✅ Email enviado via Brevo API a:', to, '| messageId:', data.messageId);
+  return data;
 }
 
-console.log('📧 Sistema de email al iniciar:');
-console.log('   BREVO_SMTP_USER:', process.env.BREVO_SMTP_USER ? process.env.BREVO_SMTP_USER : '❌ NO CONFIGURADO EN RENDER');
-console.log('   BREVO_SMTP_PASS:', process.env.BREVO_SMTP_PASS ? '✅ CONFIGURADO' : '❌ NO CONFIGURADO EN RENDER');
+console.log('📧 Email configurado:');
+console.log('   BREVO_API_KEY:', process.env.BREVO_API_KEY ? '✅ LISTO' : '❌ FALTA — configurar en Render Environment');
+console.log('   Remitente:', process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || '❌ FALTA EMAIL_USER');
+
 
 
 
