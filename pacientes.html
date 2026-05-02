@@ -188,7 +188,7 @@
 
     function clearForm() {
       selectedId = null;
-      ['txt-nombre', 'txt-apellido', 'txt-dni', 'txt-tel', 'txt-email', 'txt-historial'].forEach(id =>
+      ['txt-nombre', 'txt-apellido', 'txt-dni', 'txt-tel', 'txt-email', 'txt-historial', 'txt-rut'].forEach(id =>
         document.getElementById(id).value = '');
       document.getElementById('form-title').textContent  = 'Nuevo Paciente';
       document.getElementById('btn-update').disabled = true;
@@ -229,16 +229,24 @@
 
     document.getElementById('btn-update').addEventListener('click', async () => {
       if (!selectedId) return;
+      
+      const dataToUpdate = {
+        id: selectedId,
+        nombre:         document.getElementById('txt-nombre').value.trim(),
+        apellido:       document.getElementById('txt-apellido').value.trim(),
+        dni:            document.getElementById('txt-dni').value.trim(),
+        telefono:       document.getElementById('txt-tel').value.trim(),
+        email:          document.getElementById('txt-email').value.trim(),
+        historialMedico:document.getElementById('txt-historial').value.trim()
+      };
+      
+      const rutFile = document.getElementById('txt-rut').files[0];
+      if (rutFile) {
+        dataToUpdate.rut_pdf = rutFile;
+      }
+      
       try {
-        await DAO.updatePaciente({
-          id: selectedId,
-          nombre:         document.getElementById('txt-nombre').value.trim(),
-          apellido:       document.getElementById('txt-apellido').value.trim(),
-          dni:            document.getElementById('txt-dni').value.trim(),
-          telefono:       document.getElementById('txt-tel').value.trim(),
-          email:          document.getElementById('txt-email').value.trim(),
-          historialMedico:document.getElementById('txt-historial').value.trim()
-        });
+        await DAO.updatePaciente(dataToUpdate);
         showToast('Paciente actualizado.', 'success');
         clearForm(); await loadPacientes();
       } catch (e) { showToast('Error: ' + e.message, 'error'); }
