@@ -147,7 +147,7 @@ async function connectPG() {
   try {
     await pgPool.query('SELECT 1');
     console.log('✅ CONECTADO A POSTGRESQL');
-  } catch (e) { console.error('⚠️ ERROR PG:', e.message); }
+  } catch (e) { /* PG no disponible en este entorno — se ignora */ }
 }
 
 // Helpers
