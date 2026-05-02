@@ -26,6 +26,7 @@ try {
 }
 
 const app = express();
+app.set('trust proxy', true); // Necesario para detectar HTTPS correctamente en Render/Vercel
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -224,17 +225,20 @@ app.post('/api/auth/recuperar', async (req, res) => {
     const token = require('crypto').randomBytes(32).toString('hex');
     const expira = new Date(Date.now() + 3600000);
     await mongoDb.collection('usuarios_sistema').updateOne({ email }, { $set: { token_recuperacion: token, token_expiracion: expira } });
-    try {
-      const host = req.get('host');
-      const protocol = req.protocol;
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM, to: email,
-        subject: 'Recuperación de contraseña — OdontoSys',
-        html: `<p>Haz clic en el enlace para restablecer tu contraseña:</p><a href="${protocol}://${host}/reset.html?token=${token}">Restablecer contraseña</a><p>El enlace expira en 1 hora.</p>`
-      });
-    } catch (e) { console.warn('⚠️ No se pudo enviar email:', e.message); }
+    const host = req.get('host');
+    const protocol = req.protocol;
+    
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM, to: email,
+      subject: 'Recuperación de contraseña — OdontoSys',
+      html: `<p>Haz clic en el enlace para restablecer tu contraseña:</p><a href="${protocol}://${host}/reset.html?token=${token}">Restablecer contraseña</a><p>El enlace expira en 1 hora.</p>`
+    });
+
     res.json({ mensaje: 'Correo enviado' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error('❌ Error en recuperación:', e.message);
+    res.status(500).json({ error: 'No se pudo enviar el correo: ' + e.message }); 
+  }
 });
 
 app.post('/api/auth/reset', async (req, res) => {
