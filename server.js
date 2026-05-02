@@ -50,41 +50,34 @@ if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
 }
 
 // ═══════════════ SISTEMA DE EMAIL ═══════════════
-// Render bloquea SMTP saliente (Gmail/465/587).
-// Solución: Brevo HTTP API — funciona en Render y envía a CUALQUIER destinatario sin dominio propio.
-// Fallback: nodemailer para desarrollo local.
+// Render bloquea Gmail SMTP pero NO el de Brevo (smtp-relay.brevo.com:587).
+// Brevo SMTP no tiene restricción de IPs. Envía a cualquier destinatario sin dominio propio.
 async function sendEmail({ to, subject, html }) {
-  const brevoKey = process.env.BREVO_API_KEY;
+  const nodemailer = require('nodemailer');
 
-  if (brevoKey) {
-    // Brevo (ex-Sendinblue) — HTTP API, no SMTP, envía a cualquier email sin dominio verificado
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        'accept': 'application/json',
-        'api-key': brevoKey,
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        sender: { name: 'OdontoSys', email: process.env.EMAIL_USER },
-        to: [{ email: to }],
-        subject,
-        htmlContent: html
-      })
+  if (process.env.BREVO_SMTP_PASS) {
+    // ✅ Brevo SMTP — funciona en Render, sin restricción de IPs, envía a cualquier email
+    const transporter = nodemailer.createTransport({
+      host: 'smtp-relay.brevo.com',
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.BREVO_SMTP_USER,
+        pass: process.env.BREVO_SMTP_PASS
+      }
     });
-
-    const data = await response.json();
-    if (!response.ok) {
-      console.error('❌ Error Brevo:', JSON.stringify(data));
-      throw new Error(data.message || 'Error al enviar email via Brevo');
-    }
-    console.log('✅ Email enviado via Brevo a:', to, '| ID:', data.messageId);
-    return data;
+    const info = await transporter.sendMail({
+      from: `OdontoSys <${process.env.BREVO_SMTP_USER}>`,
+      to,
+      subject,
+      html
+    });
+    console.log('✅ Email enviado via Brevo SMTP a:', to, '| ID:', info.messageId);
+    return info;
 
   } else {
-    // Fallback nodemailer para desarrollo local
-    console.warn('⚠️ BREVO_API_KEY no configurada. Usando nodemailer (solo funciona en local).');
-    const nodemailer = require('nodemailer');
+    // Fallback local — solo para desarrollo, no funciona en Render
+    console.warn('⚠️ BREVO_SMTP_PASS no configurada. Usando Gmail (solo local).');
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
@@ -105,8 +98,9 @@ async function sendEmail({ to, subject, html }) {
 }
 
 console.log('📧 Sistema de email:');
-console.log('   - BREVO_API_KEY:', process.env.BREVO_API_KEY ? 'CONFIGURADO ✅ (envía a cualquier email)' : 'NO CONFIGURADA ⚠️ (fallback nodemailer local)');
-console.log('   - EMAIL_USER (remitente):', process.env.EMAIL_USER ? process.env.EMAIL_USER : 'FALTA ❌');
+console.log('   - BREVO_SMTP_PASS:', process.env.BREVO_SMTP_PASS ? 'CONFIGURADO ✅ (Brevo SMTP — envía a cualquier email)' : 'NO CONFIGURADA ⚠️ (fallback Gmail local)');
+console.log('   - Remitente:', process.env.BREVO_SMTP_USER || process.env.EMAIL_USER || 'FALTA ❌');
+
 
 
 // MongoDB
