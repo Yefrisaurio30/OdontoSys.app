@@ -4,12 +4,14 @@ const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const { Pool } = require('pg');
 const path = require('path');
-// Configuración de DNS para resolver problemas con MongoDB Atlas SRV en Windows
-const dns = require('dns');
-try {
-  dns.setServers(['8.8.8.8', '1.1.1.1']);
-} catch (e) {
-  console.warn('⚠️ No se pudo configurar servidores DNS alternativos:', e.message);
+// Configuración de DNS solo para Windows local si hay problemas con MongoDB Atlas
+if (process.platform === 'win32') {
+  const dns = require('dns');
+  try {
+    dns.setServers(['8.8.8.8', '1.1.1.1']);
+  } catch (e) {
+    console.warn('⚠️ No se pudo configurar servidores DNS alternativos:', e.message);
+  }
 }
 
 const bcrypt = require('bcryptjs');
@@ -48,15 +50,24 @@ if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
 }
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.googlemail.com',
+  port: 465,
+  secure: true,
   auth: { 
     user: process.env.EMAIL_USER, 
     pass: process.env.EMAIL_PASS 
   },
-  connectionTimeout: 20000, // Aumentado a 20s
-  greetingTimeout: 20000,
-  socketTimeout: 30000
+  debug: true,
+  logger: true,
+  tls: {
+    rejectUnauthorized: false
+  }
 });
+
+console.log('📧 Configuración de correo:');
+console.log('   - Usuario:', process.env.EMAIL_USER ? 'CONFIGURADO ✅' : 'FALTA ❌');
+console.log('   - Password:', process.env.EMAIL_PASS ? 'CONFIGURADO ✅' : 'FALTA ❌');
+console.log('   - From:', process.env.EMAIL_FROM ? process.env.EMAIL_FROM : 'Usando usuario predeterminado');
 
 // MongoDB
 const MONGO_URI = process.env.MONGO_URI;
@@ -98,19 +109,6 @@ async function connectMongo() {
   setTimeout(connectMongo, 20000);
 }
 
-// PostgreSQL
-const pgPool = new Pool({
-  host: process.env.PG_HOST || 'localhost', port: process.env.PG_PORT || 5432,
-  user: process.env.PG_USER || 'postgres', password: process.env.PG_PASSWORD || '1234',
-  database: process.env.PG_DB || 'odontosys'
-});
-
-async function connectPG() {
-  try {
-    await pgPool.query('SELECT 1');
-    console.log('✅ CONECTADO A POSTGRESQL');
-  } catch (e) { console.error('⚠️ ERROR PG:', e.message); }
-}
 
 // Helpers
 function isValidId(id) { return ObjectId.isValid(id) && id.length === 24; }
@@ -225,14 +223,17 @@ app.post('/api/auth/recuperar', async (req, res) => {
     const token = require('crypto').randomBytes(32).toString('hex');
     const expira = new Date(Date.now() + 3600000);
     await mongoDb.collection('usuarios_sistema').updateOne({ email }, { $set: { token_recuperacion: token, token_expiracion: expira } });
-    const host = req.get('host');
-    const protocol = req.protocol;
+    const host = req.get('x-forwarded-host') || req.get('host');
+    const protocol = req.get('x-forwarded-proto') || req.protocol;
+    
+    // Si el protocolo viene como 'http,https', tomamos solo https
+    const cleanProtocol = protocol.includes(',') ? protocol.split(',')[1] : protocol;
     
     await transporter.sendMail({
       from: `OdontoSys <${process.env.EMAIL_USER}>`, 
       to: email,
       subject: 'Recuperación de contraseña — OdontoSys',
-      html: `<p>Haz clic en el enlace para restablecer tu contraseña:</p><a href="${protocol}://${host}/reset.html?token=${token}">Restablecer contraseña</a><p>El enlace expira en 1 hora.</p>`
+      html: `<p>Haz clic en el enlace para restablecer tu contraseña:</p><a href="${cleanProtocol}://${host}/reset.html?token=${token}">Restablecer contraseña</a><p>El enlace expira en 1 hora.</p>`
     });
 
     res.json({ mensaje: 'Correo enviado' });
