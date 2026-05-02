@@ -50,41 +50,48 @@ if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
 }
 
 // ═══════════════ SISTEMA DE EMAIL ═══════════════
-// Render bloquea SMTP saliente en plan gratuito.
-// Se usa Resend (API HTTP) si RESEND_API_KEY está configurada.
+// Render bloquea SMTP saliente (Gmail/465/587).
+// Solución: Brevo HTTP API — funciona en Render y envía a CUALQUIER destinatario sin dominio propio.
 // Fallback: nodemailer para desarrollo local.
 async function sendEmail({ to, subject, html }) {
-  const resendKey = process.env.RESEND_API_KEY;
-  
-  if (resendKey) {
-    // Resend via fetch (sin dependencia extra si no está instalada)
-    try {
-      const { Resend } = require('resend');
-      const resend = new Resend(resendKey);
-      const result = await resend.emails.send({
-        from: 'OdontoSys <onboarding@resend.dev>',
-        to,
+  const brevoKey = process.env.BREVO_API_KEY;
+
+  if (brevoKey) {
+    // Brevo (ex-Sendinblue) — HTTP API, no SMTP, envía a cualquier email sin dominio verificado
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': brevoKey,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: 'OdontoSys', email: process.env.EMAIL_USER },
+        to: [{ email: to }],
         subject,
-        html
-      });
-      if (result.error) throw new Error(JSON.stringify(result.error));
-      console.log('✅ Email enviado via Resend:', result.data?.id);
-      return result;
-    } catch (e) {
-      console.error('❌ Error Resend:', e.message);
-      throw e;
+        htmlContent: html
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('❌ Error Brevo:', JSON.stringify(data));
+      throw new Error(data.message || 'Error al enviar email via Brevo');
     }
+    console.log('✅ Email enviado via Brevo a:', to, '| ID:', data.messageId);
+    return data;
+
   } else {
     // Fallback nodemailer para desarrollo local
-    console.warn('⚠️ RESEND_API_KEY no configurada. Usando nodemailer (solo funciona en local).');
+    console.warn('⚠️ BREVO_API_KEY no configurada. Usando nodemailer (solo funciona en local).');
     const nodemailer = require('nodemailer');
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,
-      auth: { 
-        user: process.env.EMAIL_USER, 
-        pass: process.env.EMAIL_PASS 
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
       },
       tls: { rejectUnauthorized: false }
     });
@@ -98,8 +105,9 @@ async function sendEmail({ to, subject, html }) {
 }
 
 console.log('📧 Sistema de email:');
-console.log('   - RESEND_API_KEY:', process.env.RESEND_API_KEY ? 'CONFIGURADO ✅ (usará Resend)' : 'NO CONFIGURADA ⚠️ (fallback nodemailer local)');
-console.log('   - EMAIL_USER:', process.env.EMAIL_USER ? 'CONFIGURADO ✅' : 'FALTA ❌');
+console.log('   - BREVO_API_KEY:', process.env.BREVO_API_KEY ? 'CONFIGURADO ✅ (envía a cualquier email)' : 'NO CONFIGURADA ⚠️ (fallback nodemailer local)');
+console.log('   - EMAIL_USER (remitente):', process.env.EMAIL_USER ? process.env.EMAIL_USER : 'FALTA ❌');
+
 
 // MongoDB
 const MONGO_URI = process.env.MONGO_URI;
@@ -273,20 +281,13 @@ app.post('/api/auth/recuperar', async (req, res) => {
     const cleanProtocol = rawProtocol.includes(',') ? rawProtocol.split(',')[0].trim() : rawProtocol;
     const resetUrl = `${cleanProtocol}://${host}/reset.html?token=${token}`;
 
-    // En Resend sin dominio verificado, solo se puede enviar al email del dueño de la cuenta.
-    // El token igual se guarda y el enlace funciona para el usuario que lo solicite.
-    const destinatario = process.env.RESEND_API_KEY
-      ? process.env.EMAIL_USER   // En deploy: siempre al admin (límite Resend test mode)
-      : email;                   // En local con nodemailer: al usuario real
-
     await sendEmail({
-      to: destinatario,
-      subject: `[OdontoSys] Recuperación de contraseña para ${email}`,
+      to: email,
+      subject: 'Recuperación de contraseña — OdontoSys',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 10px;">
           <h2 style="color: #1e40af;">OdontoSys — Recuperar contraseña</h2>
-          ${destinatario !== email ? `<p style="background:#fef9c3;padding:10px;border-radius:6px;"><strong>⚠️ Solicitud enviada por:</strong> ${email}</p>` : ''}
-          <p>Se ha solicitado restablecer la contraseña de la cuenta: <strong>${email}</strong></p>
+          <p>Hemos recibido una solicitud para restablecer la contraseña de tu cuenta.</p>
           <p>Haz clic en el botón para continuar:</p>
           <a href="${resetUrl}" style="display:inline-block; background:#1e40af; color:white; padding:12px 24px; border-radius:6px; text-decoration:none; font-weight:bold;">Restablecer contraseña</a>
           <p style="margin-top:20px; color:#64748b; font-size:13px;">Este enlace expira en 1 hora. Si no solicitaste esto, ignora este correo.</p>
