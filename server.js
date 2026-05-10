@@ -726,9 +726,9 @@ app.get('/api/caja/pdf', authMiddleware, async (req, res) => {
     doc.rect(50, tableTop, 500, 20).fill('#f8fafc');
     doc.fillColor('#1e40af');
     doc.text('FACTURA', 60, tableTop + 5);
-    doc.text('CLIENTE', 150, tableTop + 5);
-    doc.text('FECHA', 350, tableTop + 5);
-    doc.text('TOTAL', 480, tableTop + 5);
+    doc.text('CLIENTE', 210, tableTop + 5);
+    doc.text('FECHA', 390, tableTop + 5);
+    doc.text('TOTAL', 500, tableTop + 5);
 
     // Table Items
     let currentY = tableTop + 25;
@@ -736,9 +736,9 @@ app.get('/api/caja/pdf', authMiddleware, async (req, res) => {
     for (const v of ventas) {
       if (currentY > 700) { doc.addPage(); currentY = 50; }
       doc.text(v.factura_id, 60, currentY);
-      doc.text(v.cliente_nombre.slice(0, 25), 150, currentY);
-      doc.text(new Date(v.fecha).toLocaleDateString('es-CO'), 350, currentY);
-      doc.text(`$${v.total.toLocaleString('es-CO')}`, 480, currentY);
+      doc.text(v.cliente_nombre.slice(0, 30), 210, currentY);
+      doc.text(new Date(v.fecha).toLocaleDateString('es-CO'), 390, currentY);
+      doc.text(`$${v.total.toLocaleString('es-CO')}`, 500, currentY);
       currentY += 20;
     }
 
