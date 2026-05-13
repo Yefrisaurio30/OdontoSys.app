@@ -73,11 +73,20 @@
             <label class="form-label" for="reg-dni">DNI / CC *</label>
             <input id="reg-dni" type="text" class="form-input" placeholder="Número de documento" />
           </div>
+
           <div class="form-group">
             <label class="form-label" for="reg-telefono">Teléfono</label>
             <input id="reg-telefono" type="tel" class="form-input" placeholder="3XX XXX XXXX" />
           </div>
+          <div class="form-group col-span-2">
+            <label class="form-label" for="reg-rol">Tipo de cuenta</label>
+            <select id="reg-rol" class="form-select">
+              <option value="USUARIO">Paciente / Usuario</option>
+              <option value="ADMIN">Administrador (Requiere registro facial)</option>
+            </select>
+          </div>
         </div>
+
 
         <button type="submit" class="btn btn-primary btn-full" style="margin-top:12px;">
           Crear Cuenta
@@ -162,15 +171,49 @@
       btn.disabled = true;
       btn.textContent = 'Creando cuenta…';
 
+
+
+
       try {
-        await DAO.registrar(username, password, nombre, apellido, dni, telefono, email);
-        showToast('¡Cuenta creada! Redirigiendo al login...', 'success');
-        setTimeout(() => window.location.href = 'index.html', 1500);
+        const rol = document.getElementById('reg-rol').value;
+
+        const res = await fetch(`${API_BASE}/api/auth/registrar`, {
+          method: 'POST',
+          mode: 'cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, email, nombre, apellido, cedula: dni, telefono, rol })
+        });
+
+
+        
+        let data;
+        const text = await res.text();
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          console.error('Respuesta no-JSON del servidor:', text);
+          throw new Error('El servidor devolvió una respuesta inválida.');
+        }
+
+        if (!res.ok) throw new Error(data.error || 'Error al registrar');
+
+
+        // Si es ADMIN, necesitamos que inicie sesión automáticamente para ir al registro facial
+        if (rol === 'ADMIN') {
+          showToast('Cuenta de administrador creada. Iniciando sesión para registro facial...', 'info');
+          const loginData = await DAO.login(username, password);
+          Session.set(loginData);
+          setTimeout(() => window.location.href = 'registro-facial.html', 1500);
+        } else {
+          showToast('¡Cuenta creada! Redirigiendo al login...', 'success');
+          setTimeout(() => window.location.href = 'login.html', 1500);
+        }
       } catch (err) {
         showToast(err.message || 'Error al crear cuenta.', 'error');
         btn.disabled = false;
         btn.textContent = 'Crear Cuenta';
       }
+
     });
   </script>
 </body>

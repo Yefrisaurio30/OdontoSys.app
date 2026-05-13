@@ -1,4 +1,13 @@
-const API_BASE = window.location.origin;
+
+window.API_BASE = window.location.origin;
+if (window.API_BASE.includes('localhost') || window.API_BASE.includes('127.0.0.1')) {
+  if (!window.API_BASE.includes(':3001')) {
+    window.API_BASE = 'http://localhost:3001';
+  }
+}
+const API_BASE = window.API_BASE;
+
+
 
 const DAO = {
   _pacientesCache: [],
@@ -40,18 +49,26 @@ const DAO = {
   },
 
   // ===== AUTH =====
+
   async login(username, password) {
     const res = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: username, password })
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Error en login');
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      throw new Error('Respuesta inválida del servidor');
     }
-    return res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Error en login');
+    }
+    return data;
   },
+
 
   async registrar(username, password, nombre, apellido, dni, telefono, email) {
     return this.request('auth/registrar', 'POST', {

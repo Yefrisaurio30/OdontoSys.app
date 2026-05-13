@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OdontoSys — Iniciar Sesión</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <style>
     .login-card {
       width: 100%;
-      max-width: 520px;
+      max-width: 480px;
+      padding: 40px;
     }
 
     .login-logo {
@@ -35,73 +37,97 @@
       margin-bottom: 4px;
     }
 
-    .login-logo p {
-      color: var(--gris-texto);
-      font-size: 0.875rem;
+    /* ── TABS ── */
+    .tabs {
+      display: flex;
+      background: #f1f5f9;
+      padding: 4px;
+      border-radius: 12px;
+      margin-bottom: 24px;
     }
-
-    .divider {
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      background: transparent;
+      color: #64748b;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.2s;
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin: 20px 0;
-      color: var(--gris-texto);
-      font-size: 0.8rem;
+      justify-content: center;
+      gap: 6px;
+    }
+    .tab-btn.active {
+      background: white;
+      color: var(--azul-primario);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
 
-    .divider::before,
-    .divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--gris-borde);
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── BIOMETRÍA ── */
+    .face-area {
+      margin-top: 24px;
+      border-top: 2px dashed #e2e8f0;
+      padding-top: 24px;
+      text-align: center;
+    }
+    .face-video-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: #0f172a;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    #face-video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    #face-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+    
+    .face-status {
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      background: #f8fafc;
+    }
+    .face-status.scan { background: #dbeafe; color: #1d4ed8; }
+    .face-status.blink { background: #fef9c3; color: #854d0e; }
+    .face-status.ok { background: #dcfce7; color: #166534; }
+    .face-status.err { background: #fee2e2; color: #991b1b; }
+
+    .blink-indicators {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      transition: all 0.3s;
+    }
+    .dot.active {
+      background: #22c55e;
+      transform: scale(1.2);
     }
 
     .register-link {
       text-align: center;
-      margin-top: 20px;
+      margin-top: 24px;
       font-size: 0.875rem;
       color: var(--gris-texto);
     }
-
-    .register-link a {
-      color: var(--azul-primario);
-      font-weight: 600;
-      text-decoration: none;
-    }
-
+    .register-link a { color: var(--azul-primario); font-weight: 600; text-decoration: none; }
     .register-link a:hover { text-decoration: underline; }
-
-    .demo-hint {
-      background: var(--azul-claro);
-      border: 1px solid var(--azul-medio);
-      border-radius: var(--radio-sm);
-      padding: 12px 16px;
-      font-size: 0.8rem;
-      color: var(--azul-oscuro);
-      margin-top: 20px;
-    }
-
-    .demo-hint strong { display: block; margin-bottom: 4px; }
-
-    .password-wrapper {
-      position: relative;
-    }
-
-    .password-toggle {
-      position: absolute;
-      right: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: var(--gris-texto);
-      font-size: 1rem;
-      padding: 4px;
-    }
-
-    .password-wrapper .form-input { padding-right: 42px; }
   </style>
 </head>
 <body>
@@ -112,36 +138,70 @@
       <div class="login-logo">
         <div class="big-icon">🦷</div>
         <h1>OdontoSys</h1>
-        <p>Sistema de Gestión Odontológica</p>
+        <p>Sistema de Gestión Profesional</p>
       </div>
 
-      <form id="login-form" novalidate>
-        <div class="form-group">
-          <label class="form-label" for="username">Usuario</label>
-          <input id="username" type="text" class="form-input" placeholder="Tu nombre de usuario" autocomplete="username" />
-        </div>
+      <div class="tabs">
+        <button class="tab-btn active" id="btn-tab-user" onclick="switchTab('user')">👤 Usuario</button>
+        <button class="tab-btn" id="btn-tab-admin" onclick="switchTab('admin')">🛡️ Administrador</button>
+      </div>
 
-        <div class="form-group">
-          <label class="form-label" for="password">Contraseña</label>
-          <div class="password-wrapper">
-            <input id="password" type="password" class="form-input" placeholder="••••••••" autocomplete="current-password" />
-            <button type="button" class="password-toggle" id="toggle-pass" title="Mostrar/ocultar contraseña">👁</button>
+      <!-- PANEL USUARIO -->
+      <div id="panel-user" class="tab-panel active">
+        <form id="form-user">
+          <div class="form-group">
+            <label class="form-label">Email o Usuario</label>
+            <input type="text" id="user-login" class="form-input" placeholder="tu@email.com" required>
           </div>
+          <div class="form-group">
+            <label class="form-label">Contraseña</label>
+            <input type="password" id="user-pass" class="form-input" placeholder="••••••••" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">🚀 Iniciar Sesión</button>
+        </form>
+        <div class="register-link">
+          ¿No tienes cuenta? <a href="registro.html">Regístrate como paciente</a>
+        </div>
+      </div>
+
+      <!-- PANEL ADMINISTRADOR -->
+      <div id="panel-admin" class="tab-panel">
+        <div id="admin-step-1">
+          <div class="form-group">
+            <label class="form-label">Email de Admin</label>
+            <input type="text" id="admin-login" class="form-input" placeholder="admin@odontosys.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contraseña</label>
+            <input type="password" id="admin-pass" class="form-input" placeholder="••••••••">
+          </div>
+          <button onclick="verificarAdmin()" class="btn btn-primary btn-full">Verificar y continuar →</button>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-full" style="margin-top:8px;">
-          Iniciar Sesión
-        </button>
-      </form>
+        <div id="admin-step-2" class="face-area" style="display:none;">
+          <p style="font-weight:700; font-size:0.9rem; margin-bottom:12px;">🧬 Verificación Facial Requerida</p>
+          
+          <div class="face-video-wrap">
+            <video id="face-video" autoplay muted playsinline></video>
+            <canvas id="face-canvas"></canvas>
+          </div>
+
+          <div class="blink-indicators" id="blink-indicators">
+            <div class="dot" id="dot-1"></div>
+            <div class="dot" id="dot-2"></div>
+          </div>
+
+          <div id="face-status" class="face-status">
+            Esperando cámara...
+          </div>
+
+          <button id="btn-start-face" onclick="startFaceAuth()" class="btn btn-secondary btn-full">📷 Iniciar Cámara</button>
+          <button onclick="cancelAdmin()" class="btn btn-ghost btn-full" style="margin-top:8px;">✕ Cancelar</button>
+        </div>
+      </div>
 
       <div style="text-align:center;margin-top:16px;">
-        <a href="recuperar.html" id="forgot-password-link" style="color:var(--azul-primario);font-size:0.85rem;text-decoration:none;">¿Olvidaste tu contraseña?</a>
-      </div>
-
-      <div class="divider">o</div>
-
-      <div class="register-link">
-        ¿No tienes cuenta? <a href="registro.html">Regístrate aquí</a>
+        <a href="recuperar.html" style="color:var(--azul-primario);font-size:0.8rem;text-decoration:none;">¿Olvidaste tu contraseña?</a>
       </div>
     </div>
   </div>
@@ -151,43 +211,185 @@
   <script>
     if (Session.get()) window.location.href = 'menu.html';
 
-    document.getElementById('toggle-pass').addEventListener('click', () => {
-      const input = document.getElementById('password');
-      input.type = input.type === 'password' ? 'text' : 'password';
-    });
+    const WEIGHTS_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+    let modelsLoaded = false;
+    let stream = null;
+    let scanInterval = null;
+    let pendingAdmin = null;
+    let blinks = 0;
+    let isClosed = false;
 
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
+    function switchTab(t) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('btn-tab-' + t).classList.add('active');
+      document.getElementById('panel-' + t).classList.add('active');
+      stopCamera();
+    }
+
+    // Login Usuario Normal
+    document.getElementById('form-user').onsubmit = async (e) => {
       e.preventDefault();
-      const username = document.getElementById('username').value.trim();
-      const password = document.getElementById('password').value;
-      if (!username || !password) { showToast('Ingresa usuario y contraseña.', 'warning'); return; }
+      const user = document.getElementById('user-login').value.trim();
+      const pass = document.getElementById('user-pass').value;
+      const btn = e.target.querySelector('button');
+      btn.disabled = true; btn.textContent = 'Entrando...';
+      try {
+        const res = await DAO.login(user, pass);
+        if (res.rol === 'ADMIN') {
+          showToast('Los administradores deben usar la pestaña de Administrador.', 'warning');
+        } else {
+          Session.set(res);
+          window.location.href = 'menu.html';
+        }
+      } catch (err) { showToast(err.message, 'error'); }
+      finally { btn.disabled = false; btn.textContent = '🚀 Iniciar Sesión'; }
+    };
 
-      const btn = e.target.querySelector('button[type=submit]');
-      btn.disabled = true; btn.textContent = 'Verificando…';
+    // Paso 1 Admin: Credenciales
+    async function verificarAdmin() {
+      const user = document.getElementById('admin-login').value.trim();
+      const pass = document.getElementById('admin-pass').value;
+      if(!user || !pass) return showToast('Ingresa credenciales de admin.', 'warning');
 
       try {
-        const usuario = await DAO.login(username, password);
-        showToast('Conexión a la base de datos exitosa.', 'info');
-        if (usuario) {
-          Session.set(usuario);
-          const displayNombre = usuario.nombre || usuario.username || 'Usuario';
-          showToast(`¡Bienvenido, ${displayNombre}!`, 'success');
-          setTimeout(() => window.location.href = 'menu.html', 600);
-        } else {
-          showToast('Credenciales incorrectas.', 'error');
-          document.getElementById('password').value = '';
-          document.getElementById('password').focus();
-        }
-      } catch (err) {
-        showToast('Error de conexión: ' + err.message, 'error');
-      } finally {
-        btn.disabled = false; btn.textContent = 'Iniciar Sesión';
-      }
-    });
+        const res = await DAO.login(user, pass);
+        if (res.rol !== 'ADMIN') return showToast('Esta cuenta no es de administrador.', 'error');
+        
+        pendingAdmin = res;
+        document.getElementById('admin-step-1').style.display = 'none';
+        document.getElementById('admin-step-2').style.display = 'block';
+      } catch (err) { showToast(err.message, 'error'); }
+    }
 
-    document.getElementById('username').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') document.getElementById('password').focus();
-    });
+    function cancelAdmin() {
+      stopCamera();
+      document.getElementById('admin-step-1').style.display = 'block';
+      document.getElementById('admin-step-2').style.display = 'none';
+      pendingAdmin = null;
+    }
+
+    // Paso 2 Admin: Rostro + Parpadeo
+    async function startFaceAuth() {
+      const status = document.getElementById('face-status');
+      const btn = document.getElementById('btn-start-face');
+      btn.disabled = true;
+      status.textContent = '⏳ Cargando IA...';
+
+      if (!modelsLoaded) {
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(WEIGHTS_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(WEIGHTS_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(WEIGHTS_URL)
+        ]);
+        modelsLoaded = true;
+      }
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
+        const video = document.getElementById('face-video');
+        video.srcObject = stream;
+        await video.play();
+        btn.style.display = 'none';
+        status.className = 'face-status scan';
+        status.textContent = '🔍 Buscando rostro...';
+        
+        // Obtener descriptor de referencia
+        let refDescriptor = null;
+        try {
+        const res = await fetch(`${API_BASE}/api/auth/face-descriptor/${pendingAdmin.id}`, {
+          mode: 'cors',
+          headers: { 'Authorization': 'Bearer ' + pendingAdmin.token }
+        }).then(r => r.json());
+          if (d.descriptor) refDescriptor = new Float32Array(d.descriptor);
+        } catch (e) { console.error('No se pudo obtener descriptor de referencia'); }
+
+        if (!refDescriptor) {
+          status.className = 'face-status err';
+          status.textContent = '⚠️ Sin rostro registrado. Entrando por primera vez...';
+          setTimeout(() => { Session.set(pendingAdmin); window.location.href = 'menu.html'; }, 2000);
+          return;
+        }
+
+        loop(refDescriptor);
+      } catch (err) {
+        showToast('Error de cámara: ' + err.message, 'error');
+        btn.disabled = false;
+      }
+    }
+
+    function loop(ref) {
+      const video = document.getElementById('face-video');
+      const canvas = document.getElementById('face-canvas');
+      const status = document.getElementById('face-status');
+      blinks = 0;
+      isClosed = false;
+
+      scanInterval = setInterval(async () => {
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks()
+          .withFaceDescriptors();
+
+        const ctx = canvas.getContext('2d');
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        ctx.clearRect(0,0,canvas.width, canvas.height);
+
+        if (detections.length === 0) {
+          status.textContent = '❓ No detecto tu cara';
+          return;
+        }
+
+        const det = detections[0];
+        faceapi.draw.drawFaceLandmarks(canvas, [det]);
+
+        // 1. Verificar Identidad
+        const dist = faceapi.euclideanDistance(ref, det.descriptor);
+        if (dist > 0.6) {
+          status.className = 'face-status err';
+          status.textContent = '❌ No eres el administrador';
+          return;
+        }
+
+        // 2. Liveness (Parpadeo)
+        const landmarks = det.landmarks;
+        const leftEye = landmarks.getLeftEye();
+        const rightEye = landmarks.getRightEye();
+        const ear = (getEAR(leftEye) + getEAR(rightEye)) / 2;
+
+        if (ear < 0.22) {
+          isClosed = true;
+        } else if (isClosed) {
+          isClosed = false;
+          blinks++;
+          document.getElementById('dot-' + blinks).classList.add('active');
+          status.className = 'face-status blink';
+          status.textContent = `✅ Parpadeo ${blinks}/2`;
+          
+          if (blinks >= 2) {
+            clearInterval(scanInterval);
+            status.className = 'face-status ok';
+            status.textContent = '🔓 ¡Acceso Concedido!';
+            setTimeout(() => { Session.set(pendingAdmin); window.location.href = 'menu.html'; }, 1000);
+          }
+        } else if (blinks < 2) {
+          status.className = 'face-status scan';
+          status.textContent = '👁️ Parpadea 2 veces';
+        }
+      }, 100);
+    }
+
+    function getEAR(eye) {
+      const p2_p6 = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y);
+      const p3_p5 = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y);
+      const p1_p4 = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y);
+      return (p2_p6 + p3_p5) / (2.0 * p1_p4);
+    }
+
+    function stopCamera() {
+      if (scanInterval) clearInterval(scanInterval);
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
   </script>
 </body>
 </html>

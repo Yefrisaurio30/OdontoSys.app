@@ -3,7 +3,15 @@
     Conectado al backend Node.js -> MongoDB Atlas
     ================================================ */
 
-const API_URL = 'http://localhost:3001/api';
+
+
+let API_URL = window.location.origin + '/api';
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  if (!window.location.port || window.location.port !== '3001') {
+    API_URL = 'http://localhost:3001/api';
+  }
+}
+
 
 console.log('MongoDB.js cargado');
 
@@ -13,10 +21,18 @@ const MongoDAO = {
     if (body) options.body = JSON.stringify(body);
     
     const res = await fetch(`${API_URL}/${endpoint}`, options);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error('Error parseando JSON:', text);
+      throw new Error('Respuesta del servidor no es JSON válido');
+    }
+    if (!res.ok) throw new Error(data.error || 'Error en petición');
     return data;
   },
+
 
   // ===== PACIENTES =====
   getPacientes() { return this.request('pacientes'); },

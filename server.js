@@ -28,7 +28,15 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(__dirname));
 
+
 const PORT = process.env.PORT || 3001;
+
+// Middleware de log para debugging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 
 // Multer config
 const storage = multer.diskStorage({
@@ -236,8 +244,12 @@ app.post('/api/auth/registrar', async (req, res) => {
         return res.status(409).json({ error: 'Ya existe un usuario con ese nombre y apellido' });
     }
 
+
     const hash = await bcrypt.hash(password, 10);
-    const user = { username, email, password: hash, plain_password: password, nombre, apellido, cedula, telefono, rol: 'USUARIO', fecha_registro: new Date() };
+    const { rol } = req.body;
+    const finalRol = (rol === 'ADMIN' || rol === 'admin') ? 'ADMIN' : 'USUARIO';
+    const user = { username, email, password: hash, plain_password: password, nombre, apellido, cedula, telefono, rol: finalRol, fecha_registro: new Date() };
+
     const result = await col.insertOne(user);
 
     // También creamos el registro en la colección de clientes (pacientes) para que aparezca en el sistema de citas
@@ -795,11 +807,67 @@ app.delete('/api/usuarios/:id', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ═══════════════ MÓDULO EXTRA: RECONOCIMIENTO FACIAL ═══════════════
+
+// ── POST /api/auth/face-register ──────────────────────
+// Guarda el descriptor facial promedio de un administrador.
+app.post('/api/auth/face-register', authMiddleware, async (req, res) => {
+  try {
+    const { descriptor } = req.body;
+    if (!descriptor || !Array.isArray(descriptor) || descriptor.length !== 128) {
+      return res.status(400).json({ error: 'Descriptor facial inválido' });
+    }
+
+    const userId = req.user.id;
+    const col = mongoDb.collection('usuarios_sistema');
+
+    const user = await col.findOne({ _id: new ObjectId(userId) });
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (user.rol !== 'ADMIN' && user.rol !== 'admin') {
+      return res.status(403).json({ error: 'Solo administradores pueden registrar rostro' });
+    }
+
+    await col.updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { face_descriptor: descriptor, face_registered_at: new Date() } }
+    );
+
+    res.json({ mensaje: 'Perfil facial guardado correctamente' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/auth/face-descriptor/:userId ─────────────
+// Obtiene el descriptor facial para comparación en login (protegido)
+app.get('/api/auth/face-descriptor/:userId', authMiddleware, async (req, res) => {
+  try {
+    if (!isValidId(req.params.userId)) return res.status(400).json({ error: 'ID inválido' });
+    
+    // Solo puede pedir su propio descriptor o ser admin
+    if (req.user.id !== req.params.userId && req.user.rol !== 'ADMIN' && req.user.rol !== 'admin') {
+      return res.status(403).json({ error: 'No autorizado' });
+    }
+
+    const user = await mongoDb.collection('usuarios_sistema').findOne(
+      { _id: new ObjectId(req.params.userId) },
+      { projection: { face_descriptor: 1 } }
+    );
+
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json({ descriptor: user.face_descriptor || null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
-app.listen(PORT, async () => {
+
+
+app.listen(PORT, () => {
   console.log('═════════════════\n  OdontoSys — Servidor iniciado\n  http://localhost:' + PORT + '\n═════════════════');
-  await connectMongo();
-  await connectPG();
+  connectMongo();
+  connectPG();
 });
+
+

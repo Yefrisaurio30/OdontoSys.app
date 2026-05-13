@@ -3,115 +3,379 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OdontoSys — Login</title>
+  <title>OdontoSys — Iniciar Sesión</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <style>
     .login-container {
-      max-width: 400px;
-      margin: 100px auto;
-      padding: 30px;
+      max-width: 450px;
+      margin: 80px auto;
+      padding: 32px;
       background: white;
-      border-radius: var(--radio);
-      box-shadow: var(--sombra);
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
     }
-    .login-container h2 {
+    h2 {
       text-align: center;
-      margin-bottom: 20px;
-      color: var(--azul-principal);
+      margin-bottom: 24px;
+      color: #1e293b;
+      font-size: 1.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
     }
-    .login-container .form-group {
-      margin-bottom: 15px;
+    
+    /* TABS */
+    .tabs {
+      display: flex;
+      background: #f1f5f9;
+      padding: 4px;
+      border-radius: 12px;
+      margin-bottom: 24px;
     }
-    .recuperar-form {
-      display: none;
+    .tab-btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      background: transparent;
+      color: #64748b;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .tab-btn.active {
+      background: white;
+      color: #2563eb;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* FORMULARIOS */
+    .form-group { margin-bottom: 18px; }
+    .form-label { display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px; }
+    .form-input { 
+      width: 100%; padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 10px; 
+      font-size: 0.95rem; transition: border-color 0.2s; 
+    }
+    .form-input:focus { border-color: #2563eb; outline: none; }
+    
+    .btn {
+      width: 100%; padding: 12px; border: none; border-radius: 10px; 
+      font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary { background: #f1f5f9; color: #475569; }
+
+    /* ÁREA BIOMÉTRICA */
+    .face-area {
       margin-top: 20px;
       padding-top: 20px;
-      border-top: 1px solid #e2e8f0;
-    }
-    .toggle-link {
+      border-top: 2px dashed #cbd5e1;
       text-align: center;
-      margin-top: 15px;
-      color: var(--azul-principal);
-      cursor: pointer;
-      font-size: 0.9rem;
     }
-    .toggle-link:hover {
-      text-decoration: underline;
+    .video-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: #0f172a;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 12px;
     }
+    #face-video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    #face-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+    
+    .blink-row { display: flex; justify-content: center; gap: 8px; margin-bottom: 12px; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; background: #e2e8f0; transition: all 0.3s; }
+    .dot.active { background: #22c55e; transform: scale(1.2); }
+
+    .status-msg {
+      padding: 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; margin-bottom: 12px;
+      background: #f8fafc; color: #64748b;
+    }
+    .status-msg.scan { background: #dbeafe; color: #1d4ed8; }
+    .status-msg.ok { background: #dcfce7; color: #166534; }
+    .status-msg.err { background: #fee2e2; color: #991b1b; }
+
+    .toggle-link { text-align: center; margin-top: 15px; color: #2563eb; cursor: pointer; font-size: 0.85rem; }
+    .toggle-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <div class="login-container">
     <h2>🔐 OdontoSys Login</h2>
-    
-    <!-- Formulario de login -->
-    <div id="login-form">
-      <div class="form-group">
-        <label class="form-label" for="email">Email *</label>
-        <input id="email" type="email" class="form-input" placeholder="tu@email.com" required />
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="password">Contraseña *</label>
-        <input id="password" type="password" class="form-input" placeholder="••••••••" required />
-      </div>
-      <button onclick="login()" class="btn btn-primary" style="width:100%;">🚀 Iniciar sesión</button>
-      <div class="toggle-link" onclick="mostrarRecuperar()">¿Olvidé mi contraseña?</div>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-u" onclick="switchTab('u')">👤 Usuario</button>
+      <button class="tab-btn" id="tab-a" onclick="switchTab('a')">🛡️ Administrador</button>
     </div>
 
-    <!-- Formulario de recuperación -->
-    <div id="recuperar-form" class="recuperar-form">
-      <h3 style="font-size:1rem; margin-bottom:15px;">🔄 Recuperar Contraseña</h3>
-      <div class="form-group">
-        <label class="form-label" for="email-recuperar">Email *</label>
-        <input id="email-recuperar" type="email" class="form-input" placeholder="tu@email.com" required />
+    <!-- PANEL USUARIO -->
+    <div id="panel-u" class="tab-panel active">
+      <div id="u-form-area">
+        <div class="form-group">
+          <label class="form-label">Email / Usuario</label>
+          <input id="u-email" type="text" class="form-input" placeholder="tu@email.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contraseña</label>
+          <input id="u-pass" type="password" class="form-input" placeholder="••••••••">
+        </div>
+
+        <button onclick="loginNormal()" class="btn btn-primary">🚀 Iniciar Sesión</button>
+        <div style="text-align:center; margin-top:16px; font-size:0.85rem; color:#64748b;">
+          ¿No tienes cuenta? <a href="registro.html" style="color:#2563eb; font-weight:600; text-decoration:none;">Regístrate aquí</a>
+        </div>
+        <div class="toggle-link" onclick="mostrarRecuperar()">¿Olvidé mi contraseña?</div>
       </div>
-      <button onclick="recuperar()" class="btn btn-secondary" style="width:100%;">📧 Enviar correo</button>
+    </div>
+
+
+
+    <!-- PANEL ADMINISTRADOR -->
+    <div id="panel-a" class="tab-panel">
+      <!-- Paso 1: Credenciales -->
+      <div id="a-step-1">
+        <div class="form-group">
+          <label class="form-label">Email de Administrador</label>
+          <input id="a-email" type="text" class="form-input" placeholder="admin@odontosys.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contraseña</label>
+          <input id="a-pass" type="password" class="form-input" placeholder="••••••••">
+        </div>
+        <button onclick="verificarAdmin()" class="btn btn-primary">Verificar Identidad →</button>
+        <div style="text-align:center; margin-top:16px; font-size:0.85rem; color:#64748b;">
+          ¿Eres nuevo administrador? <a href="registro.html" style="color:#2563eb; font-weight:600; text-decoration:none;">Regístrate aquí</a>
+        </div>
+      </div>
+
+
+      <!-- Paso 2: Biometría -->
+      <div id="a-step-2" class="face-area" style="display:none;">
+        <p style="font-weight:700; font-size:0.85rem; margin-bottom:12px;">👁️ Verificación de Rostro + Parpadeo</p>
+        
+        <div class="video-wrap">
+          <video id="face-video" autoplay muted playsinline></video>
+          <canvas id="face-canvas"></canvas>
+        </div>
+
+        <div class="blink-row">
+          <div class="dot" id="dot-1"></div>
+          <div class="dot" id="dot-2"></div>
+        </div>
+
+        <div id="status" class="status-msg">Iniciando sistema facial...</div>
+
+        <button id="btn-camera" onclick="startCamera()" class="btn btn-secondary">📷 Iniciar Cámara</button>
+        <button onclick="resetAdmin()" class="btn btn-ghost" style="margin-top:8px;">✕ Cancelar</button>
+      </div>
+    </div>
+
+    <!-- RECUPERACIÓN -->
+    <div id="recuperar-form" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid #e2e8f0;">
+      <h3 style="text-align:center; font-size:1rem; margin-bottom:15px;">🔄 Recuperar Contraseña</h3>
+      <div class="form-group">
+        <label class="form-label">Email *</label>
+        <input id="rec-email" type="email" class="form-input" placeholder="tu@email.com">
+      </div>
+      <button onclick="enviarRecuperacion()" class="btn btn-secondary">📧 Enviar Correo</button>
       <div class="toggle-link" onclick="mostrarLogin()">← Volver al login</div>
     </div>
   </div>
 
+  <script src="app.js"></script>
+  <script src="DAOHybrid.js"></script>
   <script>
-    // Verificar si ya hay token
-    const token = localStorage.getItem('token');
-    if (token) window.location.href = 'menu.html';
+    if (localStorage.getItem('token')) window.location.href = 'menu.html';
 
-    function mostrarRecuperar() {
-      document.getElementById('login-form').style.display = 'none';
-      document.getElementById('recuperar-form').style.display = 'block';
+    const WEIGHTS = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+    let modelsLoaded = false;
+    let stream = null;
+    let loop = null;
+    let blinks = 0;
+    let isClosed = false;
+    let pendingAdmin = null;
+
+    function switchTab(t) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('tab-' + t).classList.add('active');
+      document.getElementById('panel-' + t).classList.add('active');
+      stopCamera();
     }
 
-    function mostrarLogin() {
-      document.getElementById('login-form').style.display = 'block';
-      document.getElementById('recuperar-form').style.display = 'none';
+    async function loginNormal() {
+      const email = document.getElementById('u-email').value;
+      const password = document.getElementById('u-pass').value;
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+          method: 'POST',
+          mode: 'cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        if (data.rol === 'ADMIN') return alert('Usa la pestaña de Administrador.');
+        
+        completar(data);
+      } catch (err) { alert(err.message); }
     }
 
-    async function login() {
-      const email    = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
+    async function verificarAdmin() {
+      const email = document.getElementById('a-email').value;
+      const password = document.getElementById('a-pass').value;
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+          method: 'POST',
+          mode: 'cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        if (data.rol !== 'ADMIN') return alert('No eres administrador.');
 
-      const res  = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await res.json();
+        pendingAdmin = data;
+        document.getElementById('a-step-1').style.display = 'none';
+        document.getElementById('a-step-2').style.display = 'block';
+      } catch (err) { alert(err.message); }
+    }
 
-      if (!res.ok) return alert(data.error || 'Error en login');
+    function resetAdmin() {
+      stopCamera();
+      document.getElementById('a-step-1').style.display = 'block';
+      document.getElementById('a-step-2').style.display = 'none';
+    }
 
+    async function startCamera() {
+      const status = document.getElementById('status');
+      const btn = document.getElementById('btn-camera');
+      btn.disabled = true;
+      status.textContent = '⏳ Cargando IA...';
+
+      if (!modelsLoaded) {
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(WEIGHTS),
+          faceapi.nets.faceLandmark68Net.loadFromUri(WEIGHTS),
+          faceapi.nets.faceRecognitionNet.loadFromUri(WEIGHTS)
+        ]);
+        modelsLoaded = true;
+      }
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
+        const video = document.getElementById('face-video');
+        video.srcObject = stream;
+        await video.play();
+        btn.style.display = 'none';
+        
+        // Obtener descriptor
+        const res = await fetch(`${API_BASE}/api/auth/face-descriptor/${pendingAdmin.id}`, {
+          headers: { 'Authorization': 'Bearer ' + pendingAdmin.token }
+        });
+        const d = await res.json();
+        
+        if (!d.descriptor) {
+          status.className = 'status-msg err';
+          status.textContent = '⚠️ Sin rostro registrado. Acceso temporal concedido.';
+          setTimeout(() => completar(pendingAdmin), 1500);
+          return;
+        }
+
+        const ref = new Float32Array(d.descriptor);
+        iniciarBucle(ref);
+      } catch (err) { alert('Error cámara: ' + err.message); btn.disabled = false; }
+    }
+
+    function iniciarBucle(ref) {
+      const video = document.getElementById('face-video');
+      const canvas = document.getElementById('face-canvas');
+      const status = document.getElementById('status');
+      blinks = 0;
+
+      loop = setInterval(async () => {
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks().withFaceDescriptors();
+
+        const ctx = canvas.getContext('2d');
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        ctx.clearRect(0,0,canvas.width, canvas.height);
+
+        if (!detections.length) { status.textContent = '🔍 Buscando rostro...'; return; }
+
+        const det = detections[0];
+        faceapi.draw.drawFaceLandmarks(canvas, [det]);
+
+        // Identidad
+        const dist = faceapi.euclideanDistance(ref, det.descriptor);
+        if (dist > 0.55) { status.className = 'status-msg err'; status.textContent = '❌ Identidad no coincide'; return; }
+
+        // Parpadeo (EAR)
+        const lm = det.landmarks;
+        const ear = (getEAR(lm.getLeftEye()) + getEAR(lm.getRightEye())) / 2;
+
+        if (ear < 0.22) { isClosed = true; }
+        else if (isClosed) {
+          isClosed = false; blinks++;
+          document.getElementById('dot-' + blinks).classList.add('active');
+          status.className = 'status-msg scan'; status.textContent = `✅ Parpadeo ${blinks}/2`;
+          if (blinks >= 2) {
+            clearInterval(loop); status.className = 'status-msg ok'; status.textContent = '🔓 Acceso Concedido';
+            setTimeout(() => completar(pendingAdmin), 800);
+          }
+        } else if (blinks < 2) {
+          status.className = 'status-msg scan'; status.textContent = '👁️ Parpadea 2 veces';
+        }
+      }, 150);
+    }
+
+    function getEAR(eye) {
+      const A = Math.hypot(eye[1].x - eye[5].x, eye[1].y - eye[5].y);
+      const B = Math.hypot(eye[2].x - eye[4].x, eye[2].y - eye[4].y);
+      const C = Math.hypot(eye[0].x - eye[3].x, eye[0].y - eye[3].y);
+      return (A + B) / (2.0 * C);
+    }
+
+    function stopCamera() {
+      if (loop) clearInterval(loop);
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+
+    function completar(data) {
       localStorage.setItem('token', data.token);
-      localStorage.setItem('usuario', JSON.stringify({ nombre: data.nombre, rol: data.rol }));
+      localStorage.setItem('odonto_session', JSON.stringify(data));
       window.location.href = 'menu.html';
     }
 
-    async function recuperar() {
-      const email = document.getElementById('email-recuperar').value;
-      const res   = await fetch('/api/auth/recuperar', {
+    function mostrarRecuperar() { 
+      document.getElementById('u-form-area').style.display = 'none'; 
+      document.getElementById('recuperar-form').style.display = 'block'; 
+    }
+    function mostrarLogin() { 
+      document.getElementById('u-form-area').style.display = 'block'; 
+      document.getElementById('recuperar-form').style.display = 'none'; 
+    }
+    async function enviarRecuperacion() {
+      const email = document.getElementById('rec-email').value;
+      const res = await fetch(`${API_BASE}/api/auth/recuperar`, {
         method: 'POST',
+        mode: 'cors',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })
       });
-      const data = await res.json();
-      alert(res.ok ? 'Revisa tu correo' : (data.error || 'Error'));
+      alert(res.ok ? 'Correo enviado' : 'Error');
     }
   </script>
 </body>
