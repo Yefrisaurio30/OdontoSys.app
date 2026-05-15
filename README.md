@@ -230,17 +230,18 @@ app.post('/api/auth/login', async (req, res) => { ... });
 
 #### `POST /api/auth/registrar`
 ```javascript
-app.post('/api/auth/registrar', async (req, res) => { ... });
+app.post('/api/auth/registrar', upload.single('rut_pdf'), async (req, res) => { ... });
 ```
-- Recibe: username, email, password, nombre, apellido, cedula, telefono
+- Recibe: username, email, password, nombre, apellido, cedula, telefono y el archivo **RUT (PDF)**.
 - **Validaciones:**
-  - Email debe ser `@gmail.com` (para recuperación)
-  - Nombre/Apellido solo letras (regex `^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$`)
-  - Cédula solo números
-  - Teléfono mínimo 10 dígitos
-- **Duplicados:** Verifica que no exista otro usuario con el mismo username, email, cédula, teléfono o nombre+apellido
-- Encripta la contraseña con `bcrypt.hash(password, 10)` (10 rondas de sal)
-- Crea el usuario en `usuarios_sistema` Y un registro en `clientes` automáticamente
+  - Email debe ser `@gmail.com` (obligatorio para recuperación).
+  - RUT PDF es obligatorio para cuentas de tipo `USUARIO`.
+  - Nombre/Apellido: solo letras (regex `^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$`).
+  - Cédula: solo números.
+  - Teléfono: mínimo 10 dígitos.
+- **Duplicados:** Verifica que no exista otro usuario con el mismo username, email, cédula, teléfono o nombre+apellido.
+- Encripta la contraseña con `bcrypt.hash(password, 10)`.
+- Crea el usuario en `usuarios_sistema` Y un registro en `clientes` (incluyendo la referencia al RUT) automáticamente.
 
 #### `POST /api/auth/recuperar`
 ```javascript
@@ -274,10 +275,11 @@ app.post('/api/auth/reset', async (req, res) => { ... });
 | `/api/clientes/rut/:filename` | GET | Descarga el archivo PDF del RUT |
 
 **Validaciones del POST:**
-- Nombre y apellido: solo letras
-- Cédula: solo números, no duplicada
-- Teléfono: mínimo 10 dígitos, no duplicado
-- Nombre+Apellido: combinación única
+- Nombre y apellido: solo letras.
+- Cédula: solo números, no duplicada.
+- Teléfono: mínimo 10 dígitos, no duplicado.
+- RUT: El archivo es gestionado primordialmente durante el registro de cuenta para asegurar la integridad legal del expediente.
+- Nombre+Apellido: combinación única.
 
 ### 1.9 Módulo de Odontólogos — Rutas `/api/odontologos/*` (líneas 402-444)
 
@@ -290,12 +292,12 @@ CRUD estándar con validaciones similares a clientes. Cada odontólogo tiene: no
 app.post('/api/citas', authMiddleware, async (req, res) => { ... });
 ```
 
-**Lógica anti-colisión:**
-1. Solo permite citas en el año 2026
-2. Busca TODAS las citas no canceladas
-3. Para cada cita existente, verifica si el odontólogo o el paciente ya tienen una cita dentro de un margen de **2 horas**
-4. Si hay conflicto → responde `409 Conflicto` con un mensaje descriptivo
-5. Si no hay conflicto → crea la cita con estado "Pendiente"
+**Lógica de agendamiento y anti-colisión:**
+1. **Restricción Temporal:** Solo permite citas desde la fecha/hora actual (Zona Horaria Colombia UTC-5) hasta un máximo de **1 año a futuro**.
+2. **Bloqueo de Pasado:** El sistema deshabilita automáticamente la selección de días y horas anteriores al momento actual.
+3. **Anti-colisión:** Para cada cita existente, verifica si el odontólogo o el paciente ya tienen una cita dentro de un margen de **2 horas**.
+4. Si hay conflicto → responde `409 Conflicto` con un mensaje descriptivo.
+5. Si no hay conflicto → crea la cita con estado "Pendiente".
 
 #### `PUT /api/citas/:id` — Editar cita
 Misma lógica anti-colisión pero excluye la cita que se está editando (por su `_id`).
@@ -311,15 +313,12 @@ CRUD estándar. Cada producto tiene: nombre, descripción, precio, stock y categ
 app.post('/api/ventas', authMiddleware, async (req, res) => { ... });
 ```
 
-**Flujo completo:**
-1. Recibe `cliente_id` y un array de `items` (producto_id + cantidad)
-2. Para cada item, verifica que el producto exista y tenga stock suficiente
-3. Busca los datos del cliente en la BD
-4. Calcula el total sumando los subtotales
-5. Genera un ID de factura: `FAC-2026-` + 8 caracteres UUID en mayúsculas
-6. Guarda la venta con todos los datos (cliente, items, total, vendedor, fecha)
-7. **Descuenta el stock** de cada producto con `$inc: { stock: -cantidad }`
-8. Devuelve la venta completa para generar el PDF
+**Flujo de Punto de Venta:**
+1. **Selección de Paciente:** Se eliminó la creación rápida de clientes y la búsqueda por cédula manual para evitar duplicados. Ahora se selecciona directamente de la lista global de pacientes vinculada al sistema.
+2. **Validación de Items:** Para cada item, verifica que el producto exista y tenga stock suficiente.
+3. **Generación de Factura:** Calcula totales y genera un ID único: `FAC-2026-` + UUID.
+4. **Impacto en Inventario:** Descuenta automáticamente el stock de cada producto vendido.
+5. **Reporte:** Abre la factura PDF en una nueva pestaña al finalizar.
 
 #### `GET /api/ventas/:factura_id/pdf` — Generar factura PDF
 ```javascript
@@ -384,7 +383,14 @@ const Session = {
 - `get()` → Primero busca en memoria, luego en localStorage. Si los datos están corruptos, limpia todo
 - `requireLogin()` → Cada página protegida llama esto al cargar. Si no hay sesión → `index.html`
 
-### 2.2 Función `showToast()` — Notificaciones
+### 2.2 Objeto `Validator` — Validación Global
+Centraliza las reglas de integridad de datos en todo el frontend:
+- `soloLetras(e)` → Restringe la entrada a caracteres alfabéticos en tiempo real.
+- `soloNumeros(e)` → Restringe la entrada a dígitos numéricos en tiempo real.
+- `esEmailValido(email)` → Verifica el formato estricto de correo electrónico.
+- `getColombiaTime()` → Calcula la fecha y hora actual ajustada a Colombia (UTC-5) para validaciones de calendario.
+
+### 2.3 Función `showToast()` — Notificaciones
 
 ```javascript
 function showToast(msg, type = 'success') { ... }
@@ -528,12 +534,11 @@ GET /api/ventas/:id/pdf → Busca venta en MongoDB
 
 ## 🔒 Seguridad del Sistema
 
-1. **Contraseñas:** Hasheadas con bcrypt (10 rondas de sal) — nunca se guardan en texto plano visible
-2. **JWT:** Tokens firmados con clave secreta, expiran en 8 horas
-3. **Middleware:** Todas las rutas de datos requieren autenticación
-4. **Validación de entrada:** Regex para nombres, cédulas, teléfonos
-5. **Protección de duplicados:** Verificación en servidor antes de crear registros
-6. **Archivos:** Solo PDFs, máximo 5 MB, renombrados con timestamp
+1. **Contraseñas:** Hasheadas con bcrypt (10 rondas de sal) — nunca se guardan en texto plano visible.
+2. **JWT:** Tokens firmados con clave secreta, expiran en 8 horas.
+3. **Validación en Tiempo Real:** Restricción de caracteres (letras/números) directamente en el teclado para evitar inyecciones simples y errores de formato.
+4. **Integridad Temporal:** Bloqueo de fechas pasadas y límite de 1 año futuro en citas para evitar datos inconsistentes.
+5. **Archivos:** Solo PDFs de RUT en registro, máximo 5 MB, renombrados con timestamp.
 
 ---
 
