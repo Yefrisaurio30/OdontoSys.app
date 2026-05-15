@@ -109,6 +109,9 @@
     if (!localStorage.getItem('token')) window.location.href = 'login.html';
     document.getElementById('top-bar-container').innerHTML = renderTopBar('Inventario');
 
+    // Restricciones en tiempo real
+    document.getElementById('nombre').addEventListener('input', Validator.soloLetras);
+
     let editId = null;
     const tabla = document.getElementById('tabla-inventario');
     const form = document.getElementById('producto-form');

@@ -151,3 +151,43 @@ function cerrarSesion() {
   Session.clear();
   window.location.href = 'index.html';
 }
+
+function drawSmallLandmarks(ctx, det, radius = 0.5) {
+  const pts = det.landmarks.positions;
+  if (!pts) return;
+  ctx.fillStyle = '#17f54ec0';
+  for (const pt of pts) {
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, radius, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+}
+
+// ─── Validaciones Globales ──────────────────────────────────────────────────
+const Validator = {
+  // Solo letras (con tildes y espacios)
+  soloLetras: (e) => {
+    e.target.value = e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
+  },
+  // Solo números
+  soloNumeros: (e) => {
+    e.target.value = e.target.value.replace(/[^0-9]/g, '');
+  },
+  // Validar email básico (debe tener @)
+  esEmailValido: (email) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  },
+  // Obtener fecha/hora actual en Colombia
+  getColombiaNow: () => {
+    const now = new Date();
+    // Offset de Colombia es UTC-5
+    // Una forma simple de obtener la fecha local de Colombia:
+    const bogota = new Date(now.toLocaleString("en-US", {timeZone: "America/Bogota"}));
+    return bogota;
+  },
+  // Formatear para input datetime-local
+  formatForInput: (date) => {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+};

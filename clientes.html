@@ -104,6 +104,12 @@
     if (!localStorage.getItem('token')) window.location.href = 'login.html';
     document.getElementById('top-bar-container').innerHTML = renderTopBar('Clientes MongoDB');
 
+    // Restricciones en tiempo real
+    document.getElementById('nombre').addEventListener('input', Validator.soloLetras);
+    document.getElementById('apellido').addEventListener('input', Validator.soloLetras);
+    document.getElementById('cedula').addEventListener('input', Validator.soloNumeros);
+    document.getElementById('telefono').addEventListener('input', Validator.soloNumeros);
+
     let editId = null;
     const tabla = document.getElementById('tabla-clientes');
     const form = document.getElementById('cliente-form');
@@ -169,6 +175,14 @@
       const fd = new FormData(form);
       const btn = document.getElementById('btn-guardar');
       btn.disabled = true;
+
+      const email = fd.get('email');
+      if (email && !Validator.esEmailValido(email)) {
+        showToast('El correo electrónico debe tener un formato válido (ejemplo@mail.com).', 'warning');
+        btn.disabled = false;
+        return;
+      }
+
       try {
         if (editId) {
           await DAO.updateCliente(editId, fd);

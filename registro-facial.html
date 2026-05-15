@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OdontoSys — Registro Facial</title>
   <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script src="/weights/face-api.js"></script>
   <style>
     body {
       background: #f8fafc;
@@ -355,7 +355,7 @@
   <script>
     if (!Session.requireAdmin()) throw 'no admin';
 
-    const TOKEN_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+    const TOKEN_URL = '/weights';
     const NUM_SAMPLES = 5;   // número de muestras a capturar
 
     let modelsLoaded = false;
@@ -370,14 +370,15 @@
     async function cargarModelos() {
       if (modelsLoaded) return true;
       try {
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(TOKEN_URL),
-          faceapi.nets.faceLandmark68Net.loadFromUri(TOKEN_URL),
-          faceapi.nets.faceRecognitionNet.loadFromUri(TOKEN_URL),
-        ]);
+        try { await faceapi.tf.setBackend('webgl'); console.log('🚀 Backend GPU activado'); } catch(e) { console.warn('No se pudo usar GPU:', e); }
+        for (const net of ['tinyFaceDetector','faceLandmark68Net','faceRecognitionNet']) {
+          console.log(`⏳ Cargando ${net}...`);
+          await faceapi.nets[net].loadFromUri(TOKEN_URL);
+          console.log(`✅ ${net} cargado`);
+        }
         modelsLoaded = true;
         return true;
-      } catch (e) { console.error(e); return false; }
+      } catch (e) { console.error('❌ Error carga modelos:', e); return false; }
     }
 
     /* ══ Paso 1 → 2: iniciar captura ══ */
@@ -441,11 +442,11 @@
           setCapStatus('warning', '⚠️ Se detectan múltiples rostros. Solo debe haber uno.');
         } else {
           lastDetection = dets[0];
-          faceapi.draw.drawFaceLandmarks(canvas, [lastDetection]);
+          drawSmallLandmarks(ctx, lastDetection, 1.5);
           document.getElementById('btn-capturar').disabled = false;
           setCapStatus('scanning', `✅ Rostro detectado. Capturadas: ${capturedDescriptors.length}/${NUM_SAMPLES}`);
         }
-      }, 300);
+      }, 100);
     }
 
     /* ══ Capturar muestra ══ */

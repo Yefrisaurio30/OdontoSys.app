@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OdontoSys — Iniciar Sesión</title>
   <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script src="/weights/face-api.js"></script>
   <style>
     .login-card {
       width: 100%;
@@ -211,7 +211,7 @@
   <script>
     if (Session.get()) window.location.href = 'menu.html';
 
-    const WEIGHTS_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+    const WEIGHTS_URL = '/weights';
     let modelsLoaded = false;
     let stream = null;
     let scanInterval = null;
@@ -277,11 +277,20 @@
       status.textContent = '⏳ Cargando IA...';
 
       if (!modelsLoaded) {
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(WEIGHTS_URL),
-          faceapi.nets.faceLandmark68Net.loadFromUri(WEIGHTS_URL),
-          faceapi.nets.faceRecognitionNet.loadFromUri(WEIGHTS_URL)
-        ]);
+        // Intentar usar WebGL (GPU) que es mucho más rápido que CPU
+        try { 
+          await faceapi.tf.setBackend('webgl'); 
+          console.log('🚀 Backend WebGL (GPU) activado'); 
+        } catch(e) { 
+          console.warn('WebGL no disponible, usando CPU por defecto'); 
+        }
+        for (const net of ['tinyFaceDetector','faceLandmark68Net','faceRecognitionNet']) {
+          try {
+            console.log(`⏳ Cargando ${net}...`);
+            await faceapi.nets[net].loadFromUri(WEIGHTS_URL);
+            console.log(`✅ ${net} cargado`);
+          } catch(e) { console.error(`❌ ${net} falló:`, e); throw e; }
+        }
         modelsLoaded = true;
       }
 
@@ -297,11 +306,12 @@
         // Obtener descriptor de referencia
         let refDescriptor = null;
         try {
-        const res = await fetch(`${API_BASE}/api/auth/face-descriptor/${pendingAdmin.id}`, {
+        const faceRes = await fetch(`${API_BASE}/api/auth/face-descriptor/${pendingAdmin.id}`, {
           mode: 'cors',
           headers: { 'Authorization': 'Bearer ' + pendingAdmin.token }
-        }).then(r => r.json());
-          if (d.descriptor) refDescriptor = new Float32Array(d.descriptor);
+        });
+        const faceData = await faceRes.json();
+        if (faceData.descriptor) refDescriptor = new Float32Array(faceData.descriptor);
         } catch (e) { console.error('No se pudo obtener descriptor de referencia'); }
 
         if (!refDescriptor) {
@@ -326,56 +336,60 @@
       isClosed = false;
 
       scanInterval = setInterval(async () => {
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
-          .withFaceLandmarks()
-          .withFaceDescriptors();
+        try {
+          // Usar un inputSize más pequeño (160) hace que la detección sea muchísimo más rápida
+          const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.5 }))
+            .withFaceLandmarks()
+            .withFaceDescriptors();
 
-        const ctx = canvas.getContext('2d');
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-        ctx.clearRect(0,0,canvas.width, canvas.height);
+          const ctx = canvas.getContext('2d');
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          ctx.clearRect(0,0,canvas.width, canvas.height);
 
-        if (detections.length === 0) {
-          status.textContent = '❓ No detecto tu cara';
-          return;
-        }
-
-        const det = detections[0];
-        faceapi.draw.drawFaceLandmarks(canvas, [det]);
-
-        // 1. Verificar Identidad
-        const dist = faceapi.euclideanDistance(ref, det.descriptor);
-        if (dist > 0.6) {
-          status.className = 'face-status err';
-          status.textContent = '❌ No eres el administrador';
-          return;
-        }
-
-        // 2. Liveness (Parpadeo)
-        const landmarks = det.landmarks;
-        const leftEye = landmarks.getLeftEye();
-        const rightEye = landmarks.getRightEye();
-        const ear = (getEAR(leftEye) + getEAR(rightEye)) / 2;
-
-        if (ear < 0.22) {
-          isClosed = true;
-        } else if (isClosed) {
-          isClosed = false;
-          blinks++;
-          document.getElementById('dot-' + blinks).classList.add('active');
-          status.className = 'face-status blink';
-          status.textContent = `✅ Parpadeo ${blinks}/2`;
-          
-          if (blinks >= 2) {
-            clearInterval(scanInterval);
-            status.className = 'face-status ok';
-            status.textContent = '🔓 ¡Acceso Concedido!';
-            setTimeout(() => { Session.set(pendingAdmin); window.location.href = 'menu.html'; }, 1000);
+          if (detections.length === 0) {
+            status.textContent = '❓ No detecto tu cara';
+            return;
           }
-        } else if (blinks < 2) {
-          status.className = 'face-status scan';
-          status.textContent = '👁️ Parpadea 2 veces';
-        }
-      }, 100);
+
+          const det = detections[0];
+          drawSmallLandmarks(ctx, det, 1.5);
+
+          // 1. Verificar Identidad
+          const dist = faceapi.euclideanDistance(ref, det.descriptor);
+          if (dist > 0.6) {
+            status.className = 'face-status err';
+            status.textContent = '❌ No eres el administrador';
+            return;
+          }
+
+          // 2. Liveness (Parpadeo)
+          const landmarks = det.landmarks;
+          const leftEye = landmarks.getLeftEye();
+          const rightEye = landmarks.getRightEye();
+          const ear = (getEAR(leftEye) + getEAR(rightEye)) / 2;
+          console.log('👁️ EAR:', ear.toFixed(3), '| isClosed:', isClosed, '| blinks:', blinks);
+
+          if (ear < 0.28) { // Umbral ajustado de 0.25 a 0.28 para mayor sensibilidad
+            isClosed = true;
+          } else if (isClosed) {
+            isClosed = false;
+            blinks++;
+            document.getElementById('dot-' + blinks).classList.add('active');
+            status.className = 'face-status blink';
+            status.textContent = `✅ Parpadeo ${blinks}/2`;
+            
+            if (blinks >= 2) {
+              clearInterval(scanInterval);
+              status.className = 'face-status ok';
+              status.textContent = '🔓 ¡Acceso Concedido!';
+              setTimeout(() => { Session.set(pendingAdmin); window.location.href = 'menu.html'; }, 1000);
+            }
+          } else if (blinks < 2) {
+            status.className = 'face-status scan';
+            status.textContent = '👁️ Parpadea 2 veces';
+          }
+        } catch (e) { console.error('Error en loop facial:', e); }
+      }, 80);
     }
 
     function getEAR(eye) {

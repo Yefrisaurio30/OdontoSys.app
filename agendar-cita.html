@@ -245,11 +245,16 @@
       document.getElementById('resumen-odo').innerHTML = `
         <div class="row"><span class="lbl">Odontólogo:</span><span class="val">Dr. ${selectedOdo.nombre} ${selectedOdo.apellido}</span></div>
         <div class="row"><span class="lbl">Especialidad:</span><span class="val">${selectedOdo.especialidad || 'Odontología General'}</span></div>`;
-      // Restringir a año 2026
-      document.getElementById('txt-fecha').min = '2026-01-01T00:00';
-      document.getElementById('txt-fecha').max = '2026-12-31T23:59';
       goStep(2);
     });
+
+    // Configurar límites de fecha al iniciar
+    const ahoraCol = Validator.getColombiaNow();
+    const unAnioDespues = new Date(ahoraCol);
+    unAnioDespues.setFullYear(ahoraCol.getFullYear() + 1);
+    document.getElementById('txt-fecha').min = Validator.formatForInput(ahoraCol);
+    document.getElementById('txt-fecha').max = Validator.formatForInput(unAnioDespues);
+
 
     // ─── Paso 2 → Paso 3 ─────────────────────────────────────────────────────
     document.getElementById('btn-volver-1').addEventListener('click', () => goStep(1));

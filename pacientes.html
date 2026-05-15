@@ -118,12 +118,10 @@
     document.getElementById('top-bar-container').innerHTML = renderTopBar('Pacientes');
 
     // Restricciones en tiempo real
-    const restrictLetters = (e) => e.target.value = e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
-    const restrictNumbers = (e) => e.target.value = e.target.value.replace(/[^0-9]/g, '');
-    document.getElementById('txt-nombre').addEventListener('input', restrictLetters);
-    document.getElementById('txt-apellido').addEventListener('input', restrictLetters);
-    document.getElementById('txt-dni').addEventListener('input', restrictNumbers);
-    document.getElementById('txt-tel').addEventListener('input', restrictNumbers);
+    document.getElementById('txt-nombre').addEventListener('input', Validator.soloLetras);
+    document.getElementById('txt-apellido').addEventListener('input', Validator.soloLetras);
+    document.getElementById('txt-dni').addEventListener('input', Validator.soloNumeros);
+    document.getElementById('txt-tel').addEventListener('input', Validator.soloNumeros);
 
     let selectedId = null;
     let allPacientes = [];
@@ -200,7 +198,10 @@
       const nombre = document.getElementById('txt-nombre').value.trim();
       const apellido = document.getElementById('txt-apellido').value.trim();
       const dni = document.getElementById('txt-dni').value.trim();
+      const email = document.getElementById('txt-email').value.trim();
+      
       if (!nombre || !apellido || !dni) { showToast('Nombre, apellido y DNI son obligatorios.', 'warning'); return; }
+      if (email && !Validator.esEmailValido(email)) { showToast('Email inválido (debe contener @).', 'warning'); return; }
       
       const fd = new FormData();
       fd.append('nombre', nombre);

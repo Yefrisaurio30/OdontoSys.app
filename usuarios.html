@@ -98,10 +98,8 @@
     if (!Session.requireAdmin()) throw 'no admin';
     document.getElementById('top-bar-container').innerHTML = renderTopBar('Usuarios');
 
-    // Restricción: solo letras en el nombre de usuario (sin números ni símbolos)
-    document.getElementById('txt-username').addEventListener('input', (e) => {
-      e.target.value = e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
-    });
+    // Restricción: solo letras en el nombre de usuario
+    document.getElementById('txt-username').addEventListener('input', Validator.soloLetras);
 
     const sessionUser = Session.get();
     let showAllPasswords = false;
