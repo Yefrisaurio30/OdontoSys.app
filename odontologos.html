@@ -96,11 +96,9 @@
     document.getElementById('top-bar-container').innerHTML = renderTopBar('Odontólogos');
 
     // Restricciones en tiempo real
-    const restrictLetters = (e) => e.target.value = e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
-    const restrictNumbers = (e) => e.target.value = e.target.value.replace(/[^0-9]/g, '');
-    document.getElementById('txt-nombre').addEventListener('input', restrictLetters);
-    document.getElementById('txt-apellido').addEventListener('input', restrictLetters);
-    document.getElementById('txt-telefono').addEventListener('input', restrictNumbers);
+    document.getElementById('txt-nombre').addEventListener('input', Validator.soloLetras);
+    document.getElementById('txt-apellido').addEventListener('input', Validator.soloLetras);
+    document.getElementById('txt-telefono').addEventListener('input', Validator.soloNumeros);
 
     let selectedId = null;
     let all = [];

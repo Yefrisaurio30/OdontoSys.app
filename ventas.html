@@ -21,21 +21,23 @@
     <div class="page-header">
       <div>
         <h2>🛒 Venta de Productos</h2>
-        <p class="subtitle">Seleccione cliente y productos para generar factura</p>
+        <p class="subtitle">Seleccione paciente y productos para generar factura</p>
       </div>
     </div>
-
-    <!-- Zona 1: Selección de cliente -->
+ 
+    <!-- Zona 1: Selección de paciente -->
     <div class="seccion">
-      <h3>👤 Cliente</h3>
-      <div style="display:flex;gap:10px;margin-bottom:15px;">
-        <input id="cedula-busqueda" type="text" class="form-input" placeholder="Buscar por cédula..." style="flex:1;" />
-        <button onclick="buscarCliente()" class="btn btn-secondary">🔍 Buscar</button>
+      <h3>👤 Paciente</h3>
+
+      <div style="margin-bottom:15px;">
+        <label class="form-label" style="font-size:0.75rem;">O seleccionar de la lista:</label>
+        <select id="select-cliente-lista" class="form-select" onchange="seleccionarDeLista()">
+          <option value="">— Seleccionar paciente —</option>
+        </select>
       </div>
       <div id="info-cliente" style="padding:10px;background:#f8fafc;border-radius:8px;font-size:0.9rem;">
-        No hay cliente seleccionado
+        No hay paciente seleccionado
       </div>
-      <button onclick="mostrarRegistroCliente()" class="btn btn-ghost" style="margin-top:10px;">➕ Registrar nuevo cliente</button>
     </div>
 
     <!-- Zona 2: Carrito de productos -->
@@ -65,27 +67,7 @@
       </div>
     </div>
 
-    <!-- Modal registro rápido cliente -->
-    <div id="modal-cliente" class="modal-overlay hidden">
-      <div class="modal-box" style="max-width:500px;">
-        <h3>Registrar Cliente</h3>
-        <form id="form-cliente-rapido">
-          <div class="form-group"><label class="form-label">Nombre *</label><input id="cli-nombre" type="text" class="form-input" required /></div>
-          <div class="form-group"><label class="form-label">Apellido *</label><input id="cli-apellido" type="text" class="form-input" required /></div>
-          <div class="form-group"><label class="form-label">Cédula *</label><input id="cli-cedula" type="text" class="form-input" required /></div>
-          <div class="form-group"><label class="form-label">Teléfono</label><input id="cli-telefono" type="tel" class="form-input" /></div>
-          <div class="form-group"><label class="form-label">Email</label><input id="cli-email" type="email" class="form-input" /></div>
-          <div class="form-group">
-            <label class="form-label">Documento RUT (PDF) *</label>
-            <input id="cli-rut" type="file" class="form-input" accept=".pdf" required />
-          </div>
-          <div class="modal-actions">
-            <button type="button" onclick="cerrarModalCliente()" class="btn btn-ghost">Cancelar</button>
-            <button type="submit" class="btn btn-primary">Guardar y Seleccionar</button>
-          </div>
-        </form>
-      </div>
-    </div>
+
 
     <!-- ── Sección de reimpresión ───────────────────────────────────────── -->
     <div class="seccion">
@@ -115,6 +97,9 @@
     if (!localStorage.getItem('token')) window.location.href = 'login.html';
     document.getElementById('top-bar-container').innerHTML = renderTopBar('Ventas');
 
+    // Restricciones en tiempo real
+    // (Ya no hay campos de registro rápido ni búsqueda por cédula aquí)
+
     let clienteSeleccionado = null;
     let carrito = [];
     let productosDisponibles = [];
@@ -129,65 +114,46 @@
       } catch (e) { showToast('Error cargando productos: ' + e.message, 'error'); }
     }
 
-    async function buscarCliente() {
-      const cedula = document.getElementById('cedula-busqueda').value.trim();
-      if (!cedula) return;
+    async function cargarClientes() {
       try {
-        const res = await fetch(`/api/clientes/buscar?cedula=${cedula}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (!res.ok) {
-          document.getElementById('info-cliente').innerHTML = 'Cliente no encontrado. <a href="#" onclick="mostrarRegistroCliente();return false;">Registrar nuevo</a>';
-          clienteSeleccionado = null;
-          return;
-        }
-        clienteSeleccionado = await res.json();
-        document.getElementById('info-cliente').innerHTML =
-          `<strong>${clienteSeleccionado.nombre} ${clienteSeleccionado.apellido}</strong><br/>CC: ${clienteSeleccionado.cedula}`;
-      } catch (e) { showToast('Error: ' + e.message, 'error'); }
+        const pacientes = await DAO.getPacientes();
+        const select = document.getElementById('select-cliente-lista');
+        select.innerHTML = '<option value="">— Seleccionar paciente —</option>' + 
+          pacientes.map(p => `<option value="${p.id}" data-cedula="${p.cedula}">${p.nombre} ${p.apellido} (${p.cedula})</option>`).join('');
+      } catch (e) { console.error('Error cargando pacientes:', e); }
     }
 
-    function mostrarRegistroCliente() {
-      document.getElementById('modal-cliente').classList.remove('hidden');
-    }
-
-    function cerrarModalCliente() {
-      document.getElementById('modal-cliente').classList.add('hidden');
-    }
-
-    document.getElementById('form-cliente-rapido').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const fd = new FormData();
-      fd.append('nombre', document.getElementById('cli-nombre').value);
-      fd.append('apellido', document.getElementById('cli-apellido').value);
-      fd.append('cedula', document.getElementById('cli-cedula').value);
-      fd.append('telefono', document.getElementById('cli-telefono').value);
-      fd.append('email', document.getElementById('cli-email').value);
+    // El buscarCliente se ha eliminado. Solo se usa la lista.
+    
+    function seleccionarDeLista() {
+      const select = document.getElementById('select-cliente-lista');
+      const id = select.value;
+      if (!id) {
+        clienteSeleccionado = null;
+        document.getElementById('info-cliente').innerHTML = 'No hay paciente seleccionado';
+        return;
+      }
       
-      const rutFile = document.getElementById('cli-rut').files[0];
-      if (rutFile) fd.append('rut_pdf', rutFile);
+      const option = select.options[select.selectedIndex];
+      // Extraer nombre y cédula del texto del option "Nombre Apellido (Cedula)"
+      const text = option.text;
+      const match = text.match(/^(.*)\s\((.*)\)$/);
+      
+      clienteSeleccionado = { 
+        id: id, 
+        nombre: match ? match[1] : text, 
+        cedula: match ? match[2] : '' 
+      };
+      actualizarInfoCliente();
+    }
 
-      try {
-        const res = await fetch('/api/clientes', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-          body: fd
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Error registrando cliente');
-        
-        clienteSeleccionado = { 
-          _id: data.id, 
-          nombre: document.getElementById('cli-nombre').value, 
-          apellido: document.getElementById('cli-apellido').value, 
-          cedula: document.getElementById('cli-cedula').value 
-        };
-        document.getElementById('info-cliente').innerHTML =
-          `<strong>${clienteSeleccionado.nombre} ${clienteSeleccionado.apellido}</strong><br/>CC: ${clienteSeleccionado.cedula}`;
-        cerrarModalCliente();
-        showToast('Cliente registrado y seleccionado ✅', 'success');
-      } catch (e) { showToast('Error: ' + e.message, 'error'); }
-    });
+    function actualizarInfoCliente() {
+      if (!clienteSeleccionado) return;
+      document.getElementById('info-cliente').innerHTML =
+          `<strong>${clienteSeleccionado.nombre}</strong><br/>CC: ${clienteSeleccionado.cedula}`;
+    }
+
+
 
     function agregarAlCarrito() {
       const productoId = document.getElementById('select-producto').value;
@@ -233,11 +199,11 @@
     }
 
     async function registrarVenta() {
-      if (!clienteSeleccionado) return alert('Seleccione un cliente primero');
+      if (!clienteSeleccionado) return alert('Seleccione un paciente primero');
       if (carrito.length === 0) return alert('Agregue al menos un producto');
 
       const body = {
-        cliente_id: clienteSeleccionado._id,
+        cliente_id: clienteSeleccionado._id || clienteSeleccionado.id,
         items: carrito.map(i => ({ producto_id: i.producto_id, cantidad: i.cantidad }))
       };
 
@@ -298,6 +264,7 @@
     }
 
     cargarProductos();
+    cargarClientes();
     cargarHistorial();
   </script>
 </body>

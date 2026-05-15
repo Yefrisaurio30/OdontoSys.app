@@ -200,7 +200,7 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/auth/registrar', async (req, res) => {
+app.post('/api/auth/registrar', upload.single('rut_pdf'), async (req, res) => {
   try {
     const { username, email, password, nombre, apellido, cedula, telefono } = req.body;
     if (!username || !email || !password || !nombre || !apellido || !cedula) {
@@ -259,6 +259,7 @@ app.post('/api/auth/registrar', async (req, res) => {
       cedula,
       telefono,
       email,
+      rut_pdf: req.file ? req.file.filename : null,
       usuario_sistema_id: result.insertedId,
       fecha_registro: new Date()
     });
