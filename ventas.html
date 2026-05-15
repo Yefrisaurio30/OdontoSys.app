@@ -7,10 +7,22 @@
   <link rel="stylesheet" href="styles.css" />
   <style>
     .seccion { background: white; border-radius: var(--radio); padding: 20px; margin-bottom: 20px; box-shadow: var(--sombra); }
-    .seccion h3 { margin-bottom: 15px; color: var(--azul-principal); }
+    .seccion h3 { margin-bottom: 15px; color: var(--azul-primario); }
     .carrito-item { display: flex; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid #e2e8f0; }
     .carrito-item span { flex: 1; }
-    .total-text { font-size: 1.2rem; font-weight: 600; color: var(--azul-principal); }
+    .total-text { font-size: 1.2rem; font-weight: 600; color: var(--azul-primario); }
+    
+    /* Modal de Registro Rápido */
+    .modal-registro {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+    }
+    .modal-registro.hidden { display: none; }
+    .modal-registro-content {
+      background: white; padding: 30px; border-radius: 16px; width: 100%; max-width: 450px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    }
   </style>
 </head>
 <body>
@@ -27,7 +39,15 @@
  
     <!-- Zona 1: Selección de paciente -->
     <div class="seccion">
-      <h3>👤 Paciente</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h3 style="margin:0;">👤 Paciente</h3>
+        <button onclick="toggleModalRegistro(true)" class="btn btn-secondary btn-sm">➕ Nuevo Paciente</button>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-bottom:15px;">
+        <input id="cedula-busqueda" type="text" class="form-input" placeholder="🔍 Buscar por cédula..." style="flex:1;" />
+        <button onclick="buscarPorCedula()" class="btn btn-secondary">Buscar</button>
+      </div>
 
       <div style="margin-bottom:15px;">
         <label class="form-label" style="font-size:0.75rem;">O seleccionar de la lista:</label>
@@ -67,6 +87,37 @@
       </div>
     </div>
 
+    <!-- Modal Registro Rápido -->
+    <div id="modal-registro" class="modal-registro hidden">
+      <div class="modal-registro-content">
+        <h3 style="margin-bottom:20px; color:var(--azul-primario);">📝 Registro Rápido de Paciente</h3>
+        <div class="form-group">
+          <label class="form-label">Nombre *</label>
+          <input type="text" id="reg-nombre" class="form-input" placeholder="Nombre" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Apellido *</label>
+          <input type="text" id="reg-apellido" class="form-input" placeholder="Apellido" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cédula *</label>
+          <input type="text" id="reg-cedula" class="form-input" placeholder="Número de documento" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Teléfono *</label>
+          <input type="text" id="reg-telefono" class="form-input" placeholder="Mínimo 10 dígitos" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">RUT (PDF) *</label>
+          <input type="file" id="reg-rut" class="form-input" accept=".pdf" />
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button onclick="toggleModalRegistro(false)" class="btn btn-ghost" style="flex:1;">Cancelar</button>
+          <button onclick="guardarPacienteRapido()" class="btn btn-primary" style="flex:1;">Guardar y Seleccionar</button>
+        </div>
+      </div>
+    </div>
+
 
 
     <!-- ── Sección de reimpresión ───────────────────────────────────────── -->
@@ -98,7 +149,11 @@
     document.getElementById('top-bar-container').innerHTML = renderTopBar('Ventas');
 
     // Restricciones en tiempo real
-    // (Ya no hay campos de registro rápido ni búsqueda por cédula aquí)
+    document.getElementById('cedula-busqueda').addEventListener('input', Validator.soloNumeros);
+    document.getElementById('reg-nombre').addEventListener('input', Validator.soloLetras);
+    document.getElementById('reg-apellido').addEventListener('input', Validator.soloLetras);
+    document.getElementById('reg-cedula').addEventListener('input', Validator.soloNumeros);
+    document.getElementById('reg-telefono').addEventListener('input', Validator.soloNumeros);
 
     let clienteSeleccionado = null;
     let carrito = [];
@@ -114,13 +169,51 @@
       } catch (e) { showToast('Error cargando productos: ' + e.message, 'error'); }
     }
 
-    async function cargarClientes() {
+    async function cargarClientes(idParaSeleccionar = null) {
       try {
         const pacientes = await DAO.getPacientes();
         const select = document.getElementById('select-cliente-lista');
         select.innerHTML = '<option value="">— Seleccionar paciente —</option>' + 
-          pacientes.map(p => `<option value="${p.id}" data-cedula="${p.cedula}">${p.nombre} ${p.apellido} (${p.cedula})</option>`).join('');
+          pacientes.map(p => `<option value="${p.id || p._id}" data-cedula="${p.cedula}">${p.nombre} ${p.apellido} (${p.cedula})</option>`).join('');
+        
+        if (idParaSeleccionar) {
+          select.value = idParaSeleccionar;
+          seleccionarDeLista();
+        }
       } catch (e) { console.error('Error cargando pacientes:', e); }
+    }
+
+    async function buscarPorCedula() {
+      const cedula = document.getElementById('cedula-busqueda').value.trim();
+      if (!cedula) return showToast('Ingrese una cédula para buscar.', 'warning');
+
+      try {
+        const res = await fetch(`/api/clientes/buscar?cedula=${cedula}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showToast('❌ Paciente no encontrado.', 'error');
+          clienteSeleccionado = null;
+          document.getElementById('info-cliente').innerHTML = 'No hay paciente seleccionado';
+          document.getElementById('select-cliente-lista').value = "";
+          return;
+        }
+
+        // Seleccionar en el dropdown
+        const select = document.getElementById('select-cliente-lista');
+        select.value = data._id || data.id;
+        
+        if (select.value) {
+          seleccionarDeLista();
+          showToast('✅ Paciente encontrado.', 'success');
+        } else {
+          // Si por alguna razón no está en la lista (raro), lo cargamos manualmente
+          clienteSeleccionado = data;
+          actualizarInfoCliente();
+        }
+      } catch (e) { showToast('Error: ' + e.message, 'error'); }
     }
 
     // El buscarCliente se ha eliminado. Solo se usa la lista.
@@ -141,10 +234,70 @@
       
       clienteSeleccionado = { 
         id: id, 
+        _id: id,
         nombre: match ? match[1] : text, 
         cedula: match ? match[2] : '' 
       };
       actualizarInfoCliente();
+    }
+
+    function toggleModalRegistro(ver) {
+      document.getElementById('modal-registro').classList.toggle('hidden', !ver);
+      if (ver) {
+        // Limpiar campos
+        document.getElementById('reg-nombre').value = '';
+        document.getElementById('reg-apellido').value = '';
+        document.getElementById('reg-cedula').value = '';
+        document.getElementById('reg-telefono').value = '';
+        document.getElementById('reg-rut').value = '';
+      }
+    }
+
+    async function guardarPacienteRapido() {
+      const nombre = document.getElementById('reg-nombre').value.trim();
+      const apellido = document.getElementById('reg-apellido').value.trim();
+      const cedula = document.getElementById('reg-cedula').value.trim();
+      const telefono = document.getElementById('reg-telefono').value.trim();
+      const rutFile = document.getElementById('reg-rut').files[0];
+
+      if (!nombre || !apellido || !cedula || !telefono || !rutFile) {
+        return showToast('Todos los campos (*) son obligatorios.', 'warning');
+      }
+
+      // Validaciones Globales Robustas
+      const soloLetras = /^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/;
+      const soloNumeros = /^[0-9]+$/;
+
+      if (!soloLetras.test(nombre) || !soloLetras.test(apellido)) {
+        return showToast('Nombre y Apellido solo deben contener letras.', 'warning');
+      }
+      if (!soloNumeros.test(cedula)) {
+        return showToast('La Cédula solo debe contener números.', 'warning');
+      }
+      if (!soloNumeros.test(telefono) || telefono.length < 10) {
+        return showToast('El Teléfono debe tener al menos 10 números.', 'warning');
+      }
+
+      const fd = new FormData();
+      fd.append('nombre', nombre);
+      fd.append('apellido', apellido);
+      fd.append('cedula', cedula);
+      fd.append('telefono', telefono);
+      fd.append('rut_pdf', rutFile);
+
+      try {
+        const res = await fetch('/api/clientes', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+          body: fd
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error registrando paciente');
+
+        showToast('✅ Paciente registrado y seleccionado.', 'success');
+        toggleModalRegistro(false);
+        await cargarClientes(data.id || data._id);
+      } catch (e) { showToast(e.message, 'error'); }
     }
 
     function actualizarInfoCliente() {

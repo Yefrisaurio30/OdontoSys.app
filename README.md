@@ -538,7 +538,9 @@ GET /api/ventas/:id/pdf → Busca venta en MongoDB
 2. **JWT:** Tokens firmados con clave secreta, expiran en 8 horas.
 3. **Validación en Tiempo Real:** Restricción de caracteres (letras/números) directamente en el teclado para evitar inyecciones simples y errores de formato.
 4. **Integridad Temporal:** Bloqueo de fechas pasadas y límite de 1 año futuro en citas para evitar datos inconsistentes.
-5. **Archivos:** Solo PDFs de RUT en registro, máximo 5 MB, renombrados con timestamp.
+5. **Auditoría Biométrica:** Registro de cada login exitoso de administrador en la colección `logs_admin_login` (IP, fecha, hora, compatibilidad).
+6. **Seguridad Facial:** Registro mediante detección de 2 parpadeos (Liveness Check) y comparación con umbral estricto (0.45).
+7. **Archivos:** Solo PDFs de RUT en registro, máximo 5 MB, renombrados con timestamp.
 
 ---
 
