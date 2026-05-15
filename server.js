@@ -511,6 +511,19 @@ app.post('/api/citas', authMiddleware, async (req, res) => {
 app.put('/api/citas/:id', authMiddleware, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido' });
+    
+    // Obtener la cita actual para verificar propiedad
+    const citaActual = await mongoDb.collection('citas').findOne({ _id: new ObjectId(req.params.id) });
+    if (!citaActual) return res.status(404).json({ error: 'Cita no encontrada' });
+
+    // Verificar si es el dueño o admin
+    const esAdmin = req.user.rol === 'ADMIN' || req.user.rol === 'admin';
+    const esDueño = citaActual.idPaciente == req.user.id || citaActual.idPaciente == req.user.username || citaActual.idPaciente == req.user.nombre;
+    
+    if (!esAdmin && !esDueño) {
+      return res.status(403).json({ error: 'No tienes permiso para modificar esta cita' });
+    }
+
     const { idPaciente, idOdontologo, fechaHora, estado, motivo } = req.body;
 
     if (fechaHora && idOdontologo && idPaciente) {
@@ -553,6 +566,17 @@ app.put('/api/citas/:id', authMiddleware, async (req, res) => {
 app.delete('/api/citas/:id', authMiddleware, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido' });
+    
+    const citaActual = await mongoDb.collection('citas').findOne({ _id: new ObjectId(req.params.id) });
+    if (!citaActual) return res.status(404).json({ error: 'Cita no encontrada' });
+
+    const esAdmin = req.user.rol === 'ADMIN' || req.user.rol === 'admin';
+    const esDueño = citaActual.idPaciente == req.user.id || citaActual.idPaciente == req.user.username || citaActual.idPaciente == req.user.nombre;
+
+    if (!esAdmin && !esDueño) {
+      return res.status(403).json({ error: 'No tienes permiso para eliminar esta cita' });
+    }
+
     await mongoDb.collection('citas').deleteOne({ _id: new ObjectId(req.params.id) });
     res.json({ mensaje: 'Cita eliminada' });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -836,6 +860,25 @@ app.post('/api/auth/face-register', authMiddleware, async (req, res) => {
     );
 
     res.json({ mensaje: 'Perfil facial guardado correctamente' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── POST /api/auth/log-admin-login ────────────────────
+// Registra un evento de inicio de sesión exitoso con verificación facial.
+app.post('/api/auth/log-admin-login', authMiddleware, async (req, res) => {
+  try {
+    const { method, compatibility } = req.body;
+    const log = {
+      userId: new ObjectId(req.user.id),
+      username: req.user.username,
+      fecha: new Date(),
+      metodo: method || 'Facial + Parpadeo',
+      compatibilidad: compatibility || 'N/A',
+      ip: req.ip,
+      userAgent: req.headers['user-agent']
+    };
+    await mongoDb.collection('logs_admin_login').insertOne(log);
+    res.json({ mensaje: 'Login registrado' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

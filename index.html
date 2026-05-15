@@ -424,6 +424,19 @@
               clearInterval(scanInterval);
               status.className = 'face-status ok';
               status.textContent = '🔓 ¡Acceso Concedido!';
+              
+              // Registrar el login en el servidor
+              try {
+                await fetch(`${API_BASE}/api/auth/log-admin-login`, {
+                  method: 'POST',
+                  headers: { 
+                    'Authorization': 'Bearer ' + pendingAdmin.token,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ compatibility: percent + '%' })
+                });
+              } catch (e) { console.warn('No se pudo registrar el log de login'); }
+
               setTimeout(() => { Session.set(pendingAdmin); window.location.href = 'menu.html'; }, 1000);
             }
           } else if (blinks < 2) {
