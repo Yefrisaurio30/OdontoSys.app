@@ -449,11 +449,21 @@
       }, 100);
     }
 
-    /* ══ Capturar muestra ══ */
     async function capturarMuestra() {
       if (!lastDetection) {
         alert('No se detecta un rostro. Ajusta tu posición.');
         return;
+      }
+      // Verificar consistencia entre muestras
+      if (capturedDescriptors.length > 0) {
+        const currentDesc = new Float32Array(lastDetection.descriptor);
+        for (const prevDesc of capturedDescriptors) {
+          const dist = faceapi.euclideanDistance(new Float32Array(prevDesc), currentDesc);
+          if (dist > 0.4) {
+            alert('⚠️ La captura no es consistente. Mantén tu rostro quieto y asegúrate de buena iluminación.');
+            return;
+          }
+        }
       }
 
       capturedDescriptors.push(Array.from(lastDetection.descriptor));

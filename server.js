@@ -246,8 +246,9 @@ app.post('/api/auth/registrar', upload.single('rut_pdf'), async (req, res) => {
 
 
     const hash = await bcrypt.hash(password, 10);
-    const { rol } = req.body;
-    const finalRol = (rol === 'ADMIN' || rol === 'admin') ? 'ADMIN' : 'USUARIO';
+    // Forzar rol USUARIO para registros públicos. 
+    // Los administradores deben promoverse desde el panel de gestión de usuarios.
+    const finalRol = 'USUARIO';
     const user = { username, email, password: hash, plain_password: password, nombre, apellido, cedula, telefono, rol: finalRol, fecha_registro: new Date() };
 
     const result = await col.insertOne(user);

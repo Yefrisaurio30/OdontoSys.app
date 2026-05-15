@@ -102,6 +102,23 @@
     .face-status.ok { background: #dcfce7; color: #166534; }
     .face-status.err { background: #fee2e2; color: #991b1b; }
 
+    /* Barra de compatibilidad */
+    .comp-bar-container {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      display: none; /* se muestra al detectar rostro */
+    }
+    .comp-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--azul-primario);
+      transition: width 0.2s, background-color 0.3s;
+    }
+
     .blink-indicators {
       display: flex;
       justify-content: center;
@@ -193,6 +210,13 @@
 
           <div id="face-status" class="face-status">
             Esperando cámara...
+          </div>
+
+          <div id="comp-container" class="comp-bar-container">
+            <div id="comp-fill" class="comp-bar-fill"></div>
+          </div>
+          <div id="comp-text" style="font-size:0.75rem; font-weight:700; color:#64748b; margin-bottom:12px; display:none;">
+            Compatibilidad: 0%
           </div>
 
           <button id="btn-start-face" onclick="startFaceAuth()" class="btn btn-secondary btn-full">📷 Iniciar Cámara</button>
@@ -316,8 +340,8 @@
 
         if (!refDescriptor) {
           status.className = 'face-status err';
-          status.textContent = '⚠️ Sin rostro registrado. Entrando por primera vez...';
-          setTimeout(() => { Session.set(pendingAdmin); window.location.href = 'menu.html'; }, 2000);
+          status.textContent = '❌ No tienes un perfil facial registrado.';
+          setTimeout(() => { cancelAdmin(); }, 3000);
           return;
         }
 
@@ -354,11 +378,29 @@
           const det = detections[0];
           drawSmallLandmarks(ctx, det, 1.5);
 
+          // Mostrar barra de compatibilidad
+          const compContainer = document.getElementById('comp-container');
+          const compFill = document.getElementById('comp-fill');
+          const compText = document.getElementById('comp-text');
+          compContainer.style.display = 'block';
+          compText.style.display = 'block';
+
           // 1. Verificar Identidad
           const dist = faceapi.euclideanDistance(ref, det.descriptor);
-          if (dist > 0.6) {
+          
+          // Cálculo de porcentaje (0.7 es el máximo razonable para 0%)
+          let percent = Math.round(Math.max(0, (0.6 - dist) / 0.6 * 100));
+          compFill.style.width = percent + '%';
+          compText.textContent = `Compatibilidad: ${percent}%`;
+
+          // Color de la barra
+          if (percent > 70) compFill.style.backgroundColor = '#22c55e'; // Verde
+          else if (percent > 40) compFill.style.backgroundColor = '#f59e0b'; // Naranja
+          else compFill.style.backgroundColor = '#ef4444'; // Rojo
+
+          if (dist > 0.45) { // Umbral mucho más estricto (antes 0.6)
             status.className = 'face-status err';
-            status.textContent = '❌ No eres el administrador';
+            status.textContent = '❌ Identidad no verificada';
             return;
           }
 

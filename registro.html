@@ -82,13 +82,7 @@
             <label class="form-label" for="reg-rut">Documento RUT (PDF) *</label>
             <input id="reg-rut" type="file" class="form-input" accept=".pdf" />
           </div>
-          <div class="form-group col-span-2">
-            <label class="form-label" for="reg-rol">Tipo de cuenta</label>
-            <select id="reg-rol" class="form-select">
-              <option value="USUARIO">Paciente / Usuario</option>
-              <option value="ADMIN">Administrador (Requiere registro facial)</option>
-            </select>
-          </div>
+
         </div>
 
 
@@ -179,7 +173,7 @@
 
 
       try {
-        const rol = document.getElementById('reg-rol').value;
+        const rol = 'USUARIO';
         const rutFile = document.getElementById('reg-rut').files[0];
 
         if (rol === 'USUARIO' && !rutFile) {
