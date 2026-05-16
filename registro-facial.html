@@ -185,6 +185,33 @@
       border-color: #1d4ed8;
     }
 
+    /* BARRA DE COMPATIBILIDAD REGISTRO */
+    .similarity-container {
+      margin: 15px 0;
+      text-align: left;
+    }
+    .similarity-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: #475569;
+    }
+    .similarity-bar {
+      width: 100%;
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .similarity-fill {
+      height: 100%;
+      width: 0%;
+      background: #2563eb;
+      transition: width 0.3s ease;
+    }
+
     .reg-btn {
       width: 100%;
       padding: 12px;
@@ -310,6 +337,16 @@
           <!-- se generan dinámicamente -->
         </div>
 
+        <div class="similarity-container" id="reg-sim-container" style="display:none;">
+          <div class="similarity-label">
+            <span>Estabilidad del Rostro</span>
+            <span id="reg-sim-value">0%</span>
+          </div>
+          <div class="similarity-bar">
+            <div id="reg-sim-fill" class="similarity-fill"></div>
+          </div>
+        </div>
+
         <div class="status-box scanning" id="cap-status">Posiciona tu cara en el óvalo…</div>
 
         <button class="reg-btn reg-btn-secondary" onclick="cancelarCaptura()">✕ Cancelar</button>
@@ -425,9 +462,9 @@
         if (video.readyState < 2) return;
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-
+  
         const dets = await faceapi
-          .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 160 }))
+          .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.5 }))
           .withFaceLandmarks()
           .withFaceDescriptors();
 
@@ -443,13 +480,22 @@
           lastDetection = dets[0];
           drawSmallLandmarks(ctx, lastDetection, 1.5);
           
+          // Feedback de estabilidad (comparando con la primera muestra si existe)
+          if (capturedDescriptors.length > 0) {
+            const firstDesc = new Float32Array(capturedDescriptors[0]);
+            const dist = faceapi.euclideanDistance(firstDesc, lastDetection.descriptor);
+            const stability = Math.max(0, Math.min(100, (1 - (dist / 0.6)) * 100));
+            updateRegSimBar(stability);
+            document.getElementById('reg-sim-container').style.display = 'block';
+          }
+
           // Lógica de parpadeo para registro
           const landmarks = lastDetection.landmarks;
           const leftEye = landmarks.getLeftEye();
           const rightEye = landmarks.getRightEye();
           const ear = (getEAR(leftEye) + getEAR(rightEye)) / 2;
 
-          if (ear < 0.28) {
+          if (ear < 0.28) { // Umbral más sensible
             isEyeClosed = true;
           } else if (isEyeClosed) {
             isEyeClosed = false;
@@ -473,7 +519,7 @@
             setCapStatus('scanning', `👁️ Parpadea 2 veces para registrarte (${blinksCount}/2)`);
           }
         }
-      }, 100);
+      }, 60);
     }
 
     function getEAR(eye) {
@@ -587,6 +633,18 @@
     }
     function volver() {
       window.location.href = 'menu.html';
+    }
+
+    function updateRegSimBar(percent) {
+      const simFill = document.getElementById('reg-sim-fill');
+      const simValue = document.getElementById('reg-sim-value');
+      const p = Math.round(percent);
+      simFill.style.width = p + '%';
+      simValue.textContent = p + '%';
+      
+      if (p > 85) simFill.style.background = '#22c55e';
+      else if (p > 60) simFill.style.background = '#eab308';
+      else simFill.style.background = '#ef4444';
     }
   </script>
 </body>

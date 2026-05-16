@@ -108,6 +108,33 @@
 
     .toggle-link { text-align: center; margin-top: 15px; color: #2563eb; cursor: pointer; font-size: 0.85rem; }
     .toggle-link:hover { text-decoration: underline; }
+
+    /* BARRA DE COMPATIBILIDAD */
+    .similarity-container {
+      margin: 15px 0;
+      text-align: left;
+    }
+    .similarity-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: #475569;
+    }
+    .similarity-bar {
+      width: 100%;
+      height: 10px;
+      background: #e2e8f0;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .similarity-fill {
+      height: 100%;
+      width: 0%;
+      background: #2563eb;
+      transition: width 0.3s ease, background-color 0.3s;
+    }
   </style>
 </head>
 <body>
@@ -169,6 +196,16 @@
           <canvas id="face-canvas"></canvas>
         </div>
 
+        <div class="similarity-container" id="sim-container" style="display:none;">
+          <div class="similarity-label">
+            <span>Compatibilidad con Registro</span>
+            <span id="sim-value">0%</span>
+          </div>
+          <div class="similarity-bar">
+            <div id="sim-fill" class="similarity-fill"></div>
+          </div>
+        </div>
+
         <div class="blink-row">
           <div class="dot" id="dot-1"></div>
           <div class="dot" id="dot-2"></div>
@@ -205,6 +242,7 @@
     let blinks = 0;
     let isClosed = false;
     let pendingAdmin = null;
+    let failCounter = 0; // Para sacar al impostor
 
     function switchTab(t) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -305,45 +343,100 @@
       const video = document.getElementById('face-video');
       const canvas = document.getElementById('face-canvas');
       const status = document.getElementById('status');
+      const simContainer = document.getElementById('sim-container');
+      const simFill = document.getElementById('sim-fill');
+      const simValue = document.getElementById('sim-value');
+      
       blinks = 0;
+      failCounter = 0;
+      simContainer.style.display = 'block';
 
       loop = setInterval(async () => {
         try {
-          const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 160 }))
+          const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.5 }))
             .withFaceLandmarks().withFaceDescriptors();
 
           const ctx = canvas.getContext('2d');
           canvas.width = video.videoWidth; canvas.height = video.videoHeight;
           ctx.clearRect(0,0,canvas.width, canvas.height);
 
-          if (!detections.length) { status.textContent = '🔍 Buscando rostro...'; return; }
+          if (!detections.length) { 
+            status.textContent = '🔍 Buscando rostro...'; 
+            updateSimBar(0);
+            return; 
+          }
 
           const det = detections[0];
           drawSmallLandmarks(ctx, det, 1.5);
 
-          // Identidad
+          // Identidad (Euclidean Distance)
           const dist = faceapi.euclideanDistance(ref, det.descriptor);
-          if (dist > 0.55) { status.className = 'status-msg err'; status.textContent = '❌ Identidad no coincide'; return; }
+          
+          // Calcular porcentaje de parecido (Inverso de la distancia)
+          // Mapeo: 0.0 dist -> 100%, 0.7 dist -> 0%
+          let similarity = Math.max(0, Math.min(100, (1 - (dist / 0.7)) * 100));
+          updateSimBar(similarity);
 
-          // Parpadeo (EAR)
+          // Umbral de seguridad endurecido (0.45 es bastante estricto)
+          if (dist > 0.45) { 
+            status.className = 'status-msg err'; 
+            status.textContent = '❌ Rostro no autorizado';
+            
+            failCounter++;
+            // Si el error persiste por ~3 segundos (30 frames * 100ms) o es muy obvio (dist > 0.6)
+            if (failCounter > 30 || dist > 0.65) {
+              clearInterval(loop);
+              stopCamera();
+              alert('⚠️ Seguridad: El rostro no coincide con el administrador. Redirigiendo...');
+              switchTab('u'); // Mandar a login de usuario
+              resetAdmin();
+            }
+            return; 
+          }
+          
+          failCounter = 0; // Resetear si el rostro coincide
+
+          // Parpadeo (EAR) - Liveness Detection
           const lm = det.landmarks;
           const ear = (getEAR(lm.getLeftEye()) + getEAR(lm.getRightEye())) / 2;
-          console.log('👁️ EAR:', ear.toFixed(3), '| isClosed:', isClosed, '| blinks:', blinks);
-
-          if (ear < 0.28) { isClosed = true; }
+          
+          if (ear < 0.28) { // Umbral más sensible para rapidez
+            isClosed = true;
+          }
           else if (isClosed) {
-            isClosed = false; blinks++;
-            document.getElementById('dot-' + blinks).classList.add('active');
-            status.className = 'status-msg scan'; status.textContent = `✅ Parpadeo ${blinks}/2`;
+            isClosed = false; 
+            blinks++;
+            const dot = document.getElementById('dot-' + blinks);
+            if (dot) dot.classList.add('active');
+            
+            status.className = 'status-msg scan'; 
+            status.textContent = `✅ Parpadeo ${blinks}/2`;
+            
             if (blinks >= 2) {
-              clearInterval(loop); status.className = 'status-msg ok'; status.textContent = '🔓 Acceso Concedido';
+              clearInterval(loop); 
+              status.className = 'status-msg ok'; 
+              status.textContent = '🔓 Identidad Verificada';
               setTimeout(() => completar(pendingAdmin), 800);
             }
           } else if (blinks < 2) {
-            status.className = 'status-msg scan'; status.textContent = '👁️ Parpadea 2 veces';
+            status.className = 'status-msg scan'; 
+            status.textContent = '👁️ Parpadea para confirmar identidad';
           }
         } catch (e) { console.error('Error en loop facial:', e); }
-      }, 80);
+      }, 60);
+    }
+
+    function updateSimBar(percent) {
+      const simFill = document.getElementById('sim-fill');
+      const simValue = document.getElementById('sim-value');
+      const p = Math.round(percent);
+      simFill.style.width = p + '%';
+      simValue.textContent = p + '%';
+      
+      // Cambiar color según similitud
+      if (p > 80) simFill.style.background = '#22c55e'; // Verde
+      else if (p > 50) simFill.style.background = '#eab308'; // Amarillo
+      else simFill.style.background = '#ef4444'; // Rojo
     }
 
     function getEAR(eye) {
