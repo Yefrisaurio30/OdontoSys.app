@@ -340,8 +340,12 @@
 
         if (!refDescriptor) {
           status.className = 'face-status err';
-          status.textContent = '❌ No tienes un perfil facial registrado.';
-          setTimeout(() => { cancelAdmin(); }, 3000);
+          status.textContent = '⚠️ Sin rostro registrado. Acceso temporal concedido.';
+          showToast('Bienvenido. Por favor registra tu rostro en el menú principal para activar la biometría.', 'info');
+          setTimeout(() => { 
+            Session.set(pendingAdmin); 
+            window.location.href = 'menu.html'; 
+          }, 2000);
           return;
         }
 
