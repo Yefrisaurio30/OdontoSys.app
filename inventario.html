@@ -111,6 +111,8 @@
 
     // Restricciones en tiempo real
     document.getElementById('nombre').addEventListener('input', Validator.soloLetras);
+    document.getElementById('stock').addEventListener('input', Validator.limitarLongitud10);
+    document.getElementById('precio').addEventListener('input', Validator.limitarLongitud10);
 
     let editId = null;
     const tabla = document.getElementById('tabla-inventario');
@@ -181,11 +183,16 @@
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const stockStr = document.getElementById('stock').value;
+      const precioStr = document.getElementById('precio').value;
+      if (stockStr.length > 10) { showToast('El stock no puede tener más de 10 dígitos.', 'warning'); return; }
+      if (precioStr.length > 10) { showToast('El precio no puede tener más de 10 dígitos.', 'warning'); return; }
+
       const producto = {
         nombre: document.getElementById('nombre').value.trim(),
         categoria: document.getElementById('categoria').value,
-        stock: parseInt(document.getElementById('stock').value) || 0,
-        precio: parseFloat(document.getElementById('precio').value) || 0,
+        stock: parseInt(stockStr) || 0,
+        precio: parseFloat(precioStr) || 0,
         descripcion: document.getElementById('descripcion').value.trim(),
       };
       if (!producto.nombre) { showToast('El nombre es obligatorio.', 'warning'); return; }

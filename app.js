@@ -173,6 +173,12 @@ const Validator = {
   soloNumeros: (e) => {
     e.target.value = e.target.value.replace(/[^0-9]/g, '');
   },
+  // Limitar longitud a máximo 10 caracteres
+  limitarLongitud10: (e) => {
+    if (e.target.value.length > 10) {
+      e.target.value = e.target.value.slice(0, 10);
+    }
+  },
   // Validar email básico (debe tener @)
   esEmailValido: (email) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);

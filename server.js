@@ -601,6 +601,9 @@ app.post('/api/productos', authMiddleware, async (req, res) => {
   try {
     const { nombre, descripcion, precio, stock, categoria } = req.body;
     if (!nombre || precio == null || stock == null) return res.status(400).json({ error: 'Nombre, precio y stock son obligatorios' });
+    if (String(precio).length > 10 || String(stock).length > 10) {
+      return res.status(400).json({ error: 'El precio y el stock no pueden tener más de 10 dígitos' });
+    }
     const result = await mongoDb.collection('productos').insertOne({ nombre, descripcion, precio: Number(precio), stock: Number(stock), categoria: categoria || 'general', fecha_creacion: new Date() });
     res.status(201).json({ id: result.insertedId });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -610,6 +613,12 @@ app.put('/api/productos/:id', authMiddleware, async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: 'ID inválido' });
     const { nombre, descripcion, precio, stock, categoria } = req.body;
+    if (precio != null && String(precio).length > 10) {
+      return res.status(400).json({ error: 'El precio no puede tener más de 10 dígitos' });
+    }
+    if (stock != null && String(stock).length > 10) {
+      return res.status(400).json({ error: 'El stock no puede tener más de 10 dígitos' });
+    }
     await mongoDb.collection('productos').updateOne({ _id: new ObjectId(req.params.id) }, { $set: { nombre, descripcion, precio: Number(precio), stock: Number(stock), categoria } });
     res.json({ mensaje: 'Producto actualizado' });
   } catch (e) { res.status(500).json({ error: e.message }); }
